@@ -1,0 +1,31 @@
+000 (69077.000.000) 2022-04-05 18:35:15 Job submitted from host: <131.227.81.127:9618?addrs=131.227.81.127-9618&alias=aisurrey-condor.surrey.ac.uk&noUDP&sock=schedd_2654421_9965>
+...
+040 (69077.000.000) 2022-04-05 18:35:16 Started transferring input files
+	Transferring to host: <131.227.80.127:9618?addrs=131.227.80.127-9618&alias=aisurrey15.surrey.ac.uk&noUDP&sock=slot1_3_5974_f92c_18457>
+...
+040 (69077.000.000) 2022-04-05 18:35:16 Finished transferring input files
+...
+001 (69077.000.000) 2022-04-05 18:35:17 Job executing on host: <131.227.80.127:9618?addrs=131.227.80.127-9618&alias=aisurrey15.surrey.ac.uk&noUDP&sock=startd_4434_ef05>
+...
+040 (69077.000.000) 2022-04-05 18:35:20 Started transferring output files
+...
+040 (69077.000.000) 2022-04-05 18:35:20 Finished transferring output files
+...
+005 (69077.000.000) 2022-04-05 18:35:20 Job terminated.
+	(1) Normal termination (return value 127)
+		Usr 0 00:00:00, Sys 0 00:00:00  -  Run Remote Usage
+		Usr 0 00:00:00, Sys 0 00:00:00  -  Run Local Usage
+		Usr 0 00:00:00, Sys 0 00:00:00  -  Total Remote Usage
+		Usr 0 00:00:00, Sys 0 00:00:00  -  Total Local Usage
+	96  -  Run Bytes Sent By Job
+	121432  -  Run Bytes Received By Job
+	96  -  Total Bytes Sent By Job
+	121432  -  Total Bytes Received By Job
+	Partitionable Resources :    Usage  Request Allocated Assigned
+	   Cpus                 :        0        1         1 
+	   Disk (KB)            :      141      125    652975 
+	   Gpus (Average)       :                 1         1 "CUDA3"
+	   Memory (MB)          :             32768     32768 
+
+	Job terminated of its own accord at 2022-04-05T17:35:20Z.
+...
