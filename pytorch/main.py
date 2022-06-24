@@ -198,10 +198,10 @@ def train(args):
         logging.info('Loading checkpoint {}'.format(resume_checkpoint_path))
         checkpoint = torch.load(resume_checkpoint_path)
         model.load_state_dict(checkpoint['model'])
-        train_sampler.load_state_dict(checkpoint['sampler'])
-        statistics_container.load_state_dict(resume_iteration)
-        iteration = checkpoint['iteration']
-
+        # train_sampler.load_state_dict(checkpoint['sampler'])
+        # statistics_container.load_state_dict(resume_iteration)
+        # iteration = checkpoint['iteration']
+        iteration = 0
     else:
         iteration = 0
     
@@ -223,7 +223,8 @@ def train(args):
         """
         
         # Evaluate
-        if (iteration % 2000 == 0 and iteration > resume_iteration) or (iteration == 0):
+        # if (iteration % 2000 == 0 and iteration > resume_iteration) or (iteration == 0):
+        if (True):
             train_fin_time = time.time()
 
             bal_statistics = evaluator.evaluate(eval_bal_loader)
@@ -295,7 +296,6 @@ def train(args):
 
         # Backward
         loss.backward()
-        print(loss)
         
         optimizer.step()
         optimizer.zero_grad()

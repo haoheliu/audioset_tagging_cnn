@@ -8,3 +8,8 @@ __pycache__
 _logs
 *.pth
 paper_statistics
+
+*.png
+workspaces
+*.pkl
+*.txt

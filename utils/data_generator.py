@@ -151,7 +151,7 @@ class TrainSampler(Base):
                     self.random_state.shuffle(self.indexes)
                 
                 # If audio in black list then continue
-                if self.audio_names[index] in self.black_list_names:
+                if self.audio_names[index] in self.black_list_names or len(self.audio_names[index]) <= 1:
                     continue
                 else:
                     batch_meta.append({
@@ -240,7 +240,7 @@ class BalancedTrainSampler(Base):
                     self.random_state.shuffle(self.indexes_per_class[class_id])
 
                 # If audio in black list then continue
-                if self.audio_names[index] in self.black_list_names:
+                if self.audio_names[index] in self.black_list_names or len(self.audio_names[index]) <= 1:
                     continue
                 else:
                     batch_meta.append({
@@ -336,7 +336,7 @@ class AlternateTrainSampler(Base):
                         self.sampler2.random_state.shuffle(self.sampler2.indexes_per_class[class_id])
 
                     # If audio in black list then continue
-                    if self.sampler2.audio_names[index] in self.sampler2.black_list_names:
+                    if self.sampler2.audio_names[index] in self.sampler2.black_list_names or len(self.sampler2.audio_names[index]) <= 1:
                         continue
                     else:
                         batch_meta.append({
@@ -394,6 +394,7 @@ class EvaluateSampler(object):
             batch_meta = []
 
             for index in batch_indexes:
+                if(len(self.audio_names[index]) <= 1): continue
                 batch_meta.append({
                     'audio_name': self.audio_names[index], 
                     'hdf5_path': self.hdf5_paths[index], 
