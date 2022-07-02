@@ -11,7 +11,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 import torch.utils.data
- 
+
 from utilities import (create_folder, get_filename, create_logging, Mixup, 
     StatisticsContainer)
 from models import (Cnn14, Cnn14_no_specaug, Cnn14_no_dropout, 
@@ -28,6 +28,12 @@ from evaluate import Evaluator
 import config
 from losses import get_loss_func
 
+def find_resume_step(path):
+    if(len(os.listdir(path)) == 0): return 0
+    else:
+        steps = [int(x.split("_")[0]) for x in os.listdir(path)]
+        print("resume from step ", max(steps))
+        return max(steps)
 
 def train(args):
     """Train AudioSet tagging model. 
@@ -95,7 +101,7 @@ def train(args):
         'loss_type={}'.format(loss_type), 'balanced={}'.format(balanced), 
         'augmentation={}'.format(augmentation), 'batch_size={}'.format(batch_size))
     create_folder(checkpoints_dir)
-    
+    resume_iteration = find_resume_step(checkpoints_dir)
     statistics_path = os.path.join(workspace, 'statistics', filename, 
         'sample_rate={},window_size={},hop_size={},mel_bins={},fmin={},fmax={}'.format(
         sample_rate, window_size, hop_size, mel_bins, fmin, fmax), 

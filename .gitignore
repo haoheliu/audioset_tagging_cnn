@@ -13,3 +13,6 @@ paper_statistics
 workspaces
 *.pkl
 *.txt
+*.log
+*.out
+*.error
