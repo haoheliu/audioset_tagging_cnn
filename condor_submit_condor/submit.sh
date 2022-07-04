@@ -8,4 +8,5 @@ cd /vol/research/NOBACKUP/CVSSP/scratch_4weeks/hl01486/projects/audioset_tagging
 EXP_NAME="panns_cnn14"
 
 ######################## RUNNING ENTRY ########################
-source scripts/4_train.sh
+echo $1
+source scripts/$1.sh

@@ -138,7 +138,7 @@ class AttBlock(nn.Module):
 
 class Cnn14(nn.Module):
     def __init__(self, sample_rate, window_size, hop_size, mel_bins, fmin, 
-        fmax, classes_num):
+        fmax, classes_num, pooling_type, pooling_factor):
         
         super(Cnn14, self).__init__()
 
@@ -148,6 +148,12 @@ class Cnn14(nn.Module):
         ref = 1.0
         amin = 1e-10
         top_db = None
+
+        from pooling import Pooling_layer
+        if(pooling_type != "no_pooling"):
+            self.pooling = Pooling_layer(pooling_type, float(pooling_factor))
+        else:
+            self.pooling = None
 
         # Spectrogram extractor
         self.spectrogram_extractor = Spectrogram(n_fft=window_size, hop_length=hop_size, 
@@ -171,7 +177,7 @@ class Cnn14(nn.Module):
         self.conv_block4 = ConvBlock(in_channels=256, out_channels=512)
         self.conv_block5 = ConvBlock(in_channels=512, out_channels=1024)
         self.conv_block6 = ConvBlock(in_channels=1024, out_channels=2048)
-
+        
         self.fc1 = nn.Linear(2048, 2048, bias=True)
         self.fc_audioset = nn.Linear(2048, classes_num, bias=True)
         
@@ -199,6 +205,9 @@ class Cnn14(nn.Module):
         # Mixup on spectrogram
         if self.training and mixup_lambda is not None:
             x = do_mixup(x, mixup_lambda)
+
+        if(self.pooling is not None):
+            x = self.pooling(x)
 
         x = self.conv_block1(x, pool_size=(2, 2), pool_type='avg')
         x = F.dropout(x, p=0.2, training=self.training)

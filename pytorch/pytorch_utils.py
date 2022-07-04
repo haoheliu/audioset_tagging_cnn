@@ -93,7 +93,7 @@ def forward(model, generator, return_input=False,
             print(' --- Inference time: {:.3f} s / 10 iterations ---'.format(
                 time.time() - time1))
             time1 = time.time()
-
+        
     for key in output_dict.keys():
         output_dict[key] = np.concatenate(output_dict[key], axis=0)
 

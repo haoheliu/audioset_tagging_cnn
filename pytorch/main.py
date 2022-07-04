@@ -74,6 +74,8 @@ def train(args):
     learning_rate = args.learning_rate
     resume_iteration = args.resume_iteration
     early_stop = args.early_stop
+    pooling_type = args.pooling_type
+    pooling_factor = args.pooling_factor
     device = torch.device('cuda') if args.cuda and torch.cuda.is_available() else torch.device('cpu')
     filename = args.filename
 
@@ -99,7 +101,7 @@ def train(args):
         sample_rate, window_size, hop_size, mel_bins, fmin, fmax), 
         'data_type={}'.format(data_type), model_type, 
         'loss_type={}'.format(loss_type), 'balanced={}'.format(balanced), 
-        'augmentation={}'.format(augmentation), 'batch_size={}'.format(batch_size))
+        'augmentation={}'.format(augmentation), 'batch_size={}'.format(batch_size),'pooling_type={}, pooling_factor={}'.format(pooling_type, pooling_factor))
     create_folder(checkpoints_dir)
     resume_iteration = find_resume_step(checkpoints_dir)
     statistics_path = os.path.join(workspace, 'statistics', filename, 
@@ -116,7 +118,7 @@ def train(args):
         sample_rate, window_size, hop_size, mel_bins, fmin, fmax), 
         'data_type={}'.format(data_type), model_type, 
         'loss_type={}'.format(loss_type), 'balanced={}'.format(balanced), 
-        'augmentation={}'.format(augmentation), 'batch_size={}'.format(batch_size))
+        'augmentation={}'.format(augmentation), 'batch_size={}'.format(batch_size),'pooling_type={}, pooling_factor={}'.format(pooling_type, pooling_factor))
 
     create_logging(logs_dir, filemode='w')
     logging.info(args)
@@ -132,7 +134,7 @@ def train(args):
     Model = eval(model_type)
     model = Model(sample_rate=sample_rate, window_size=window_size, 
         hop_size=hop_size, mel_bins=mel_bins, fmin=fmin, fmax=fmax, 
-        classes_num=classes_num)
+        classes_num=classes_num, pooling_factor=pooling_factor, pooling_type=pooling_type)
      
     params_num = count_parameters(model)
     # flops_num = count_flops(model, clip_samples)
@@ -198,16 +200,15 @@ def train(args):
             sample_rate, window_size, hop_size, mel_bins, fmin, fmax), 
             'data_type={}'.format(data_type), model_type, 
             'loss_type={}'.format(loss_type), 'balanced={}'.format(balanced), 
-            'augmentation={}'.format(augmentation), 'batch_size={}'.format(batch_size), 
+            'augmentation={}'.format(augmentation), 'batch_size={}'.format(batch_size),'pooling_type={}, pooling_factor={}'.format(pooling_type, pooling_factor),
             '{}_iterations.pth'.format(resume_iteration))
 
         logging.info('Loading checkpoint {}'.format(resume_checkpoint_path))
         checkpoint = torch.load(resume_checkpoint_path)
         model.load_state_dict(checkpoint['model'])
-        # train_sampler.load_state_dict(checkpoint['sampler'])
-        # statistics_container.load_state_dict(resume_iteration)
-        # iteration = checkpoint['iteration']
-        iteration = 0
+        train_sampler.load_state_dict(checkpoint['sampler'])
+        statistics_container.load_state_dict(resume_iteration)
+        iteration = checkpoint['iteration']
     else:
         iteration = 0
     
@@ -229,8 +230,7 @@ def train(args):
         """
         
         # Evaluate
-        # if (iteration % 2000 == 0 and iteration > resume_iteration) or (iteration == 0):
-        if (True):
+        if (iteration % 2000 == 0 and iteration > resume_iteration) or (iteration == 0):
             train_fin_time = time.time()
 
             bal_statistics = evaluator.evaluate(eval_bal_loader)
@@ -258,7 +258,7 @@ def train(args):
             train_bgn_time = time.time()
         
         # Save model
-        if iteration % 100000 == 0:
+        if iteration % 50000 == 0:
             checkpoint = {
                 'iteration': iteration, 
                 'model': model.module.state_dict(), 
@@ -341,6 +341,8 @@ if __name__ == '__main__':
     parser_train.add_argument('--resume_iteration', type=int, default=0)
     parser_train.add_argument('--early_stop', type=int, default=1000000)
     parser_train.add_argument('--cuda', action='store_true', default=False)
+    parser_train.add_argument('--pooling_type', default="no_pooling")
+    parser_train.add_argument('--pooling_factor', default=1.0)
     
     args = parser.parse_args()
     args.filename = get_filename(__file__)

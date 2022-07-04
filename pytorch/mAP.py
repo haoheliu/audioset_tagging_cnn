@@ -117,6 +117,8 @@ def _binary_clf_curve(y_true, y_score, pos_label=None, sample_weight=None):
     thresholds : ndarray of shape (n_thresholds,)
         Decreasing score values.
     """
+    # Weight is the false positive re-weighting for each sample (18k+)
+    # Original label: speech; Pred label: speech, conversation, male speech; What is the false positive weight when we calculate the class 'conversation'?
     
     # Check to make sure y_true is valid
     y_type = sklearn.utils.multiclass.type_of_target(y_true) # , input_name="y_true"
@@ -133,10 +135,10 @@ def _binary_clf_curve(y_true, y_score, pos_label=None, sample_weight=None):
     if sample_weight is not None:
         sample_weight = sklearn.utils.column_or_1d(sample_weight)
         sample_weight = sklearn.utils.validation._check_sample_weight(sample_weight, y_true)
-        nonzero_weight_mask = sample_weight != 0
-        y_true = y_true[nonzero_weight_mask]
-        y_score = y_score[nonzero_weight_mask]
-        sample_weight = sample_weight[nonzero_weight_mask]
+        # nonzero_weight_mask = sample_weight != 0
+        # y_true = y_true[nonzero_weight_mask]
+        # y_score = y_score[nonzero_weight_mask]
+        # sample_weight = sample_weight[nonzero_weight_mask]
 
     pos_label = sklearn.metrics._ranking._check_pos_label_consistency(pos_label, y_true)
 
@@ -145,7 +147,9 @@ def _binary_clf_curve(y_true, y_score, pos_label=None, sample_weight=None):
 
     # sort scores and corresponding truth values
     desc_score_indices = np.argsort(y_score, kind="mergesort")[::-1]
+    # array([9.8200458e-01, 9.7931880e-01, 9.7723687e-01, ..., 8.8192965e-04, 7.5673062e-04, 5.9041742e-04], dtype=float32)
     y_score = y_score[desc_score_indices]
+    # array([ True,  True,  True, ..., False, False, False])
     y_true = y_true[desc_score_indices]
     if sample_weight is not None:
         weight = sample_weight[desc_score_indices]

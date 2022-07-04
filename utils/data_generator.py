@@ -50,7 +50,7 @@ class AudioSetDataset(object):
 
         data_dict = {
             'audio_name': audio_name, 'waveform': waveform, 'target': target}
-            
+        # print(data_dict)
         return data_dict
 
     def resample(self, waveform):
@@ -416,7 +416,6 @@ def collate_fn(list_data_dict):
           {'audio_name': (batch_size,), 'waveform': (batch_size, clip_samples), ...}
     """
     np_data_dict = {}
-    
     for key in list_data_dict[0].keys():
         np_data_dict[key] = np.array([data_dict[key] for data_dict in list_data_dict])
     
