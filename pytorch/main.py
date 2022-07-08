@@ -309,7 +309,7 @@ def train(args):
         optimizer.step()
         optimizer.zero_grad()
         
-        if iteration % 10 == 0:
+        if iteration % 1000 == 0:
             print('--- Iteration: {}, train time: {:.3f} s / 10 iterations ---'\
                 .format(iteration, time.time() - time1))
             time1 = time.time()
