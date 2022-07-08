@@ -187,12 +187,20 @@ def train(args):
     # Statistics
     statistics_container = StatisticsContainer(statistics_path)
     
+    
+    # Parallel
+    print('GPU number: {}'.format(torch.cuda.device_count()))
+    model = torch.nn.DataParallel(model)
+
+    if 'cuda' in str(device):
+        model.to(device)
+
     # Optimizer
     optimizer = optim.Adam(model.parameters(), lr=learning_rate, 
         betas=(0.9, 0.999), eps=1e-08, weight_decay=0., amsgrad=True)
 
     train_bgn_time = time.time()
-    
+
     # Resume training
     if resume_iteration > 0:
         resume_checkpoint_path = os.path.join(workspace, 'checkpoints', filename, 
@@ -204,20 +212,14 @@ def train(args):
             '{}_iterations.pth'.format(resume_iteration))
 
         logging.info('Loading checkpoint {}'.format(resume_checkpoint_path))
-        checkpoint = torch.load(resume_checkpoint_path)
-        model.load_state_dict(checkpoint['model'])
+        checkpoint = torch.load(resume_checkpoint_path, map_location=device)
+        model.module.load_state_dict(checkpoint['model'])
         train_sampler.load_state_dict(checkpoint['sampler'])
         statistics_container.load_state_dict(resume_iteration)
+        optimizer.load_state_dict(checkpoint['optimizer'])
         iteration = checkpoint['iteration']
     else:
         iteration = 0
-    
-    # Parallel
-    print('GPU number: {}'.format(torch.cuda.device_count()))
-    model = torch.nn.DataParallel(model)
-
-    if 'cuda' in str(device):
-        model.to(device)
     
     time1 = time.time()
     
@@ -258,10 +260,11 @@ def train(args):
             train_bgn_time = time.time()
         
         # Save model
-        if iteration % 50000 == 0:
+        if iteration % 20000 == 0:
             checkpoint = {
                 'iteration': iteration, 
                 'model': model.module.state_dict(), 
+                'optimizer': optimizer.state_dict(),
                 'sampler': train_sampler.state_dict()}
 
             checkpoint_path = os.path.join(
