@@ -1,6 +1,7 @@
 import os
 import sys
 sys.path.insert(1, os.path.join(sys.path[0], '../utils'))
+sys.path.append("/vol/research/NOBACKUP/CVSSP/scratch_4weeks/hl01486/projects/audioset_tagging_cnn")
 import numpy as np
 import argparse
 import time
@@ -24,9 +25,13 @@ from pytorch_utils import (move_data_to_device, count_parameters, count_flops,
     do_mixup)
 from data_generator import (AudioSetDataset, TrainSampler, BalancedTrainSampler, 
     AlternateTrainSampler, EvaluateSampler, collate_fn)
+from model.panns import PANNs_MobileNet
+
 from evaluate import Evaluator
 import config
 from losses import get_loss_func
+
+# torch.backends.cudnn.enabled = False
 
 def find_resume_step(path):
     if(len(os.listdir(path)) == 0): return 0
@@ -131,10 +136,14 @@ def train(args):
         device = 'cpu'
     
     # Model
-    Model = eval(model_type)
-    model = Model(sample_rate=sample_rate, window_size=window_size, 
-        hop_size=hop_size, mel_bins=mel_bins, fmin=fmin, fmax=fmax, 
-        classes_num=classes_num, pooling_factor=pooling_factor, pooling_type=pooling_type)
+    if(model_type == "mobilenet"):
+        model = PANNs_MobileNet(sample_rate, window_size, hop_size, mel_bins, fmin, 
+        fmax, number_class=527, pooling_factor=pooling_factor, pooling_type=pooling_type)
+    else:
+        Model = eval(model_type)
+        model = Model(sample_rate=sample_rate, window_size=window_size, 
+            hop_size=hop_size, mel_bins=mel_bins, fmin=fmin, fmax=fmax, 
+            classes_num=classes_num, pooling_factor=pooling_factor, pooling_type=pooling_type)
      
     params_num = count_parameters(model)
     # flops_num = count_flops(model, clip_samples)
@@ -187,7 +196,6 @@ def train(args):
     # Statistics
     statistics_container = StatisticsContainer(statistics_path)
     
-    
     # Parallel
     print('GPU number: {}'.format(torch.cuda.device_count()))
     model = torch.nn.DataParallel(model)
@@ -220,7 +228,7 @@ def train(args):
         iteration = checkpoint['iteration']
     else:
         iteration = 0
-    
+    print("Start training!")
     time1 = time.time()
     
     for batch_data_dict in train_loader:
@@ -232,7 +240,7 @@ def train(args):
         """
         
         # Evaluate
-        if (iteration % 2000 == 0 and iteration > resume_iteration) or (iteration == 0):
+        if (iteration % 2000 == 0 and iteration > resume_iteration and iteration > 1000): # or (iteration == 0):
             train_fin_time = time.time()
 
             bal_statistics = evaluator.evaluate(eval_bal_loader)

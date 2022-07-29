@@ -1,8 +1,7 @@
 #!/bin/bash
 WORKSPACE="./workspaces/audioset_tagging"   # Default argument.
-echo $WORKSPACE
 
-CUDA_LAUNCH_BLOCKING=1 CUDA_VISIBLE_DEVICES=0 python3 pytorch/main.py train \
+CUDA_VISIBLE_DEVICES=0 python3 pytorch/main.py train \
     --workspace=$WORKSPACE \
     --data_type='full_train' \
     --window_size=1024 \
@@ -18,7 +17,9 @@ CUDA_LAUNCH_BLOCKING=1 CUDA_VISIBLE_DEVICES=0 python3 pytorch/main.py train \
     --learning_rate=1e-3 \
     --resume_iteration=0 \
     --early_stop=1000000 \
-    --cuda 
+    --cuda \
+    --pooling_type='avg-max' \
+    --pooling_factor=0.75
 
 # Plot statistics
 python3 utils/plot_statistics.py plot \
