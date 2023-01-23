@@ -1,5 +1,5 @@
 import sys
-sys.path.append('/vol/research/MachineAudition_CVSSP/xl01061/audioset_tagging_cnn/')
+sys.path.append("/mnt/fast/nobackup/users/hl01486/projects/audio_tagging/audioset_tagging_cnn")
 sys.path.append('/vol/research/MachineAudition_CVSSP/xl01061/audioset_tagging_cnn/network')
 import torch
 import torch.nn as nn

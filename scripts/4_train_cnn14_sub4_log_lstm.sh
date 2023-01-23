@@ -1,7 +1,8 @@
 #!/bin/bash
-WORKSPACE="/mnt/fast/nobackup/scratch4weeks/hl01486/exps/audio_tagging/panns"   # Default argument.
+WORKSPACE="./workspaces/audioset_tagging"   # Default argument.
+echo $WORKSPACE
 
-CUDA_VISIBLE_DEVICES=0 python3 pytorch/main.py train \
+CUDA_LAUNCH_BLOCKING=1 CUDA_VISIBLE_DEVICES=0 python3 pytorch/main.py train \
     --workspace=$WORKSPACE \
     --data_type='full_train' \
     --window_size=1024 \
@@ -9,7 +10,7 @@ CUDA_VISIBLE_DEVICES=0 python3 pytorch/main.py train \
     --mel_bins=64 \
     --fmin=50 \
     --fmax=14000 \
-    --model_type='Cnn14' \
+    --model_type='Cnn14_SUB4_LOG_LSTM' \
     --loss_type='clip_bce' \
     --balanced='balanced' \
     --augmentation='mixup' \
@@ -17,9 +18,7 @@ CUDA_VISIBLE_DEVICES=0 python3 pytorch/main.py train \
     --learning_rate=1e-3 \
     --resume_iteration=0 \
     --early_stop=1000000 \
-    --cuda \
-    --pooling_type='max' \
-    --pooling_factor=0.5
+    --cuda 
 
 # Plot statistics
 python3 utils/plot_statistics.py plot \

@@ -10,7 +10,7 @@ CUDA_LAUNCH_BLOCKING=1 CUDA_VISIBLE_DEVICES=0 python3 pytorch/main.py train \
     --mel_bins=64 \
     --fmin=50 \
     --fmax=14000 \
-    --model_type='mobilenet' \
+    --model_type='Cnn14_SUB4_LOG' \
     --loss_type='clip_bce' \
     --balanced='balanced' \
     --augmentation='mixup' \

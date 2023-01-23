@@ -12,7 +12,7 @@ python3 utils/create_indexes.py create_indexes \
     --indexes_hdf5_path=$WORKSPACE"/hdf5s/indexes/balanced_train.h5"
 
 # Unbalanced training indexes
-for IDX in {00..40}; do
+for IDX in {0..40}; do
     echo $IDX
     python3 utils/create_indexes.py create_indexes \
         --waveforms_hdf5_path=$WORKSPACE"/hdf5s/waveforms/unbalanced_train/unbalanced_train_part$IDX.h5" \
