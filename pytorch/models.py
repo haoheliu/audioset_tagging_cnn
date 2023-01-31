@@ -5,7 +5,6 @@ from torchlibrosa.stft import Spectrogram, LogmelFilterBank
 from torchlibrosa.augmentation import SpecAugmentation
 
 from pytorch_utils import do_mixup, interpolate, pad_framewise_output
- 
 
 def init_layer(layer):
     """Initialize a Linear or Convolutional layer. """
@@ -244,8 +243,1183 @@ class Cnn14_SUB4(nn.Module):
         output_dict = {'clipwise_output': clipwise_output, 'embedding': embedding}
 
         return output_dict
+
+def init_layer(layer):
+    """Initialize a Linear or Convolutional layer. """
+    nn.init.xavier_uniform_(layer.weight)
+ 
+    if hasattr(layer, 'bias'):
+        if layer.bias is not None:
+            layer.bias.data.fill_(0.)
+            
+    
+def init_bn(bn):
+    """Initialize a Batchnorm layer. """
+    bn.bias.data.fill_(0.)
+    bn.weight.data.fill_(1.)
+
+
+class ConvBlock(nn.Module):
+    def __init__(self, in_channels, out_channels):
+        
+        super(ConvBlock, self).__init__()
+        
+        self.conv1 = nn.Conv2d(in_channels=in_channels, 
+                              out_channels=out_channels,
+                              kernel_size=(3, 3), stride=(1, 1),
+                              padding=(1, 1), bias=False)
+                              
+        self.conv2 = nn.Conv2d(in_channels=out_channels, 
+                              out_channels=out_channels,
+                              kernel_size=(3, 3), stride=(1, 1),
+                              padding=(1, 1), bias=False)
+                              
+        self.bn1 = nn.BatchNorm2d(out_channels)
+        self.bn2 = nn.BatchNorm2d(out_channels)
+
+        self.init_weight()
+        
+    def init_weight(self):
+        init_layer(self.conv1)
+        init_layer(self.conv2)
+        init_bn(self.bn1)
+        init_bn(self.bn2)
+
+        
+    def forward(self, input, pool_size=(2, 2), pool_type='avg'):
+        
+        x = input
+        x = F.relu_(self.bn1(self.conv1(x)))
+        x = F.relu_(self.bn2(self.conv2(x)))
+        if pool_type == 'max':
+            x = F.max_pool2d(x, kernel_size=pool_size)
+        elif pool_type == 'avg':
+            x = F.avg_pool2d(x, kernel_size=pool_size)
+        elif pool_type == 'avg+max':
+            x1 = F.avg_pool2d(x, kernel_size=pool_size)
+            x2 = F.max_pool2d(x, kernel_size=pool_size)
+            x = x1 + x2
+        else:
+            raise Exception('Incorrect argument!')
+        
+        return x
+
+class ConvBlock_pruned(nn.Module):
+    def __init__(self, in_channels_1, out_channels_1,out_channels_2):
+        
+        super(ConvBlock_pruned, self).__init__()
+        
+        self.conv1 = nn.Conv2d(in_channels=in_channels_1, 
+                              out_channels=out_channels_1,
+                              kernel_size=(3, 3), stride=(1, 1),
+                              padding=(1, 1), bias=False)
+                              
+        self.conv2 = nn.Conv2d(in_channels=out_channels_1, 
+                              out_channels=out_channels_2,
+                              kernel_size=(3, 3), stride=(1, 1),
+                              padding=(1, 1), bias=False)
+                              
+        self.bn1 = nn.BatchNorm2d(out_channels_1)
+        self.bn2 = nn.BatchNorm2d(out_channels_2)
+
+        self.init_weight()
+        
+    def init_weight(self):
+        init_layer(self.conv1)
+        init_layer(self.conv2)
+        init_bn(self.bn1)
+        init_bn(self.bn2)
+
+        
+    def forward(self, input, pool_size=(2, 2), pool_type='avg'):
+        
+        x = input
+        x = F.relu_(self.bn1(self.conv1(x)))
+        x = F.relu_(self.bn2(self.conv2(x)))
+        if pool_type == 'max':
+            x = F.max_pool2d(x, kernel_size=pool_size)
+        elif pool_type == 'avg':
+            x = F.avg_pool2d(x, kernel_size=pool_size)
+        elif pool_type == 'avg+max':
+            x1 = F.avg_pool2d(x, kernel_size=pool_size)
+            x2 = F.max_pool2d(x, kernel_size=pool_size)
+            x = x1 + x2
+        else:
+            raise Exception('Incorrect argument!')
+        
+        return x
+
+class Cnn14_pruned(nn.Module):
+    def __init__(self, sample_rate, window_size, hop_size, mel_bins, fmin, 
+        fmax, classes_num, pooling_type, pooling_factor):
+        import os
+        import numpy as np
+        
+        super(Cnn14_pruned, self).__init__()
+
+        window = 'hann'
+        center = True
+        pad_mode = 'reflect'
+        ref = 1.0
+        amin = 1e-10
+        top_db = None
+        from collections import OrderedDict
+        path = '/mnt/fast/nobackup/scratch4weeks/as0150/arshdeep/PANNs_pruning/sorted_Indexes/OP' #'/home/arshdeep/Pruning/PANNs_pruning/sorted_Indexes/OP/'   
+
+        p = 0.25
+        p1 = 0
+        p2 = 0
+        p3 = 0
+        p4 = 0
+        p5 = 0
+        p6 = 0
+        p7 = 0
+        p8 = 0
+        p9 = 0
+        p10 = 0
+        p11 = p
+        p12 = p
+
+        C1 = sorted(np.load(os.path.join(path,'conv_block1.conv1.weight.npy'))[int(64*p1):64])
+        C2= sorted(np.load(os.path.join(path,'conv_block1.conv2.weight.npy'))[int(64*p2):64])
+
+
+        C3 = sorted(np.load(os.path.join(path,'conv_block2.conv1.weight.npy'))[int(128*p3):128])
+        C4 = sorted(np.load(os.path.join(path,'conv_block2.conv2.weight.npy'))[int(128*p4):128])
+
+
+        C5 = sorted(np.load(os.path.join(path,'conv_block3.conv1.weight.npy'))[int(256*p5):256])
+        C6 = sorted(np.load(os.path.join(path,'conv_block3.conv2.weight.npy'))[int(256*p6):256])
+
+
+        C7 = sorted(np.load(os.path.join(path,'conv_block4.conv1.weight.npy'))[int(512*p7):512])
+        C8 = sorted(np.load(os.path.join(path,'conv_block4.conv2.weight.npy'))[int(512*p8):512])
+
+
+        C9 = sorted(np.load(os.path.join(path,'conv_block5.conv1.weight.npy'))[int(1024*p9):1024])
+        C10 = sorted(np.load(os.path.join(path,'conv_block5.conv2.weight.npy'))[int(1024*p10):1024])
+
+
+        C11 = sorted(np.load(os.path.join(path,'conv_block6.conv1.weight.npy'))[int(2048*p11):2048])
+        C12 = sorted(np.load(os.path.join(path,'conv_block6.conv2.weight.npy'))[int(2048*p12):2048])
+
+
+        conv_index = OrderedDict()
+
+        conv_index['conv_block1.conv1.weight'] = C1
+        conv_index['conv_block1.conv2.weight'] = C2
+        conv_index['conv_block2.conv1.weight'] = C3
+        conv_index['conv_block2.conv2.weight'] = C4
+
+
+        conv_index['conv_block3.conv1.weight'] = C5
+        conv_index['conv_block3.conv2.weight'] = C6
+        conv_index['conv_block4.conv1.weight'] = C7
+        conv_index['conv_block4.conv2.weight'] = C8
+
+        conv_index['conv_block5.conv1.weight'] = C9
+        conv_index['conv_block5.conv2.weight'] = C10
+        conv_index['conv_block6.conv1.weight'] = C11
+        conv_index['conv_block6.conv2.weight'] = C12
+
+        # Spectrogram extractor
+        self.spectrogram_extractor = Spectrogram(n_fft=window_size, hop_length=hop_size, 
+            win_length=window_size, window=window, center=center, pad_mode=pad_mode, 
+            freeze_parameters=True)
+
+        # Logmel feature extractor
+        self.logmel_extractor = LogmelFilterBank(sr=sample_rate, n_fft=window_size, 
+            n_mels=mel_bins, fmin=fmin, fmax=fmax, ref=ref, amin=amin, top_db=top_db, 
+            freeze_parameters=True)
+
+        # Spec augmenter
+        self.spec_augmenter = SpecAugmentation(time_drop_width=64, time_stripes_num=2, 
+            freq_drop_width=8, freq_stripes_num=2)
+
+        self.bn0 = nn.BatchNorm2d(64)
+
+        self.conv_block1 = ConvBlock_pruned(in_channels_1=1, out_channels_1=int(64*(1-p1)),out_channels_2=int(64*(1-p2)))
+        self.conv_block2 = ConvBlock_pruned(in_channels_1=int(64*(1-p2)), out_channels_1=int(128*(1-p3)),out_channels_2=int(128*(1-p4)))
+        self.conv_block3 = ConvBlock_pruned(in_channels_1=int(128*(1-p4)), out_channels_1=int(256*(1-p5)),out_channels_2=int(256*(1-p6)))
+        self.conv_block4 = ConvBlock_pruned(in_channels_1=int(256*(1-p6)), out_channels_1=int(512*(1-p7)),out_channels_2=int(512*(1-p8)))
+        self.conv_block5 = ConvBlock_pruned(in_channels_1=int(512*(1-p8)), out_channels_1=int(1024*(1-p9)),out_channels_2=int(1024*(1-p10)))
+        self.conv_block6 = ConvBlock_pruned(in_channels_1=int(1024*(1-p10)), out_channels_1=int((1-p11)*2048),out_channels_2=int(2048*(1-p12)))
+
+        self.fc1 = nn.Linear(int(2048*(1-p12)), 2048, bias=True)
+        self.fc_audioset = nn.Linear(2048, classes_num, bias=True)
+        
+        # self.init_weight()
+        checkpoint_path = '/mnt/fast/nobackup/scratch4weeks/as0150/arshdeep/PANNs_pruning/Cnn14_mAP=0.431.pth'
+        checkpoint = torch.load(checkpoint_path, map_location=torch.device('cpu'))
+
+        weights = checkpoint['model']
+        weights_pruned = checkpoint['model']
+
+        conv_key_list = ['conv_block1.conv1.weight', 'conv_block1.conv2.weight','conv_block2.conv1.weight', 'conv_block2.conv2.weight','conv_block3.conv1.weight', 'conv_block3.conv2.weight','conv_block4.conv1.weight', 'conv_block4.conv2.weight','conv_block5.conv1.weight', 'conv_block5.conv2.weight','conv_block6.conv1.weight', 'conv_block6.conv2.weight']
+        bn_key_list = ['conv_block1.bn1.weight', 'conv_block1.bn1.bias', 'conv_block1.bn1.running_mean', 'conv_block1.bn1.running_var','conv_block1.bn2.weight', 'conv_block1.bn2.bias', 'conv_block1.bn2.running_mean', 'conv_block1.bn2.running_var','conv_block2.bn1.weight', 'conv_block2.bn1.bias', 'conv_block2.bn1.running_mean', 'conv_block2.bn1.running_var','conv_block2.bn2.weight', 'conv_block2.bn2.bias', 'conv_block2.bn2.running_mean', 'conv_block2.bn2.running_var','conv_block3.bn1.weight', 'conv_block3.bn1.bias', 'conv_block3.bn1.running_mean', 'conv_block3.bn1.running_var','conv_block3.bn2.weight', 'conv_block3.bn2.bias', 'conv_block3.bn2.running_mean', 'conv_block3.bn2.running_var','conv_block4.bn1.weight', 'conv_block4.bn1.bias', 'conv_block4.bn1.running_mean', 'conv_block4.bn1.running_var','conv_block4.bn2.weight', 'conv_block4.bn2.bias', 'conv_block4.bn2.running_mean', 'conv_block4.bn2.running_var','conv_block5.bn1.weight', 'conv_block5.bn1.bias', 'conv_block5.bn1.running_mean', 'conv_block5.bn1.running_var','conv_block5.bn2.weight', 'conv_block5.bn2.bias', 'conv_block5.bn2.running_mean', 'conv_block5.bn2.running_var','conv_block6.bn1.weight', 'conv_block6.bn1.bias', 'conv_block6.bn1.running_mean', 'conv_block6.bn1.running_var','conv_block6.bn2.weight', 'conv_block6.bn2.bias', 'conv_block6.bn2.running_mean', 'conv_block6.bn2.running_var']
+        prev_conv_key_list =  ['conv_block1.conv1.weight', 'conv_block1.conv2.weight','conv_block2.conv1.weight', 'conv_block2.conv2.weight','conv_block3.conv1.weight', 'conv_block3.conv2.weight','conv_block4.conv1.weight', 'conv_block4.conv2.weight','conv_block5.conv1.weight', 'conv_block5.conv2.weight','conv_block6.conv1.weight']
+
+        Z = OrderedDict()
+        j = 0
+        i = 0
+        for key in conv_key_list:
+            W_2D = weights[key].numpy()
+            print(key, prev_conv_key_list[i-1])
+            if i == 0:
+                weights_pruned[key] = torch.tensor(W_2D[conv_index[key],:,:,:])
+            else:
+                weights_pruned[key] = torch.tensor(W_2D[conv_index[key],:,:,:][:,conv_index[prev_conv_key_list[i-1]],:,:])
+            weights_pruned[bn_key_list[j]] = weights[bn_key_list[j]][conv_index[key]]
+            weights_pruned[bn_key_list[j+1]] = weights[bn_key_list[j+1]][conv_index[key]]
+            weights_pruned[bn_key_list[j+2]] = weights[bn_key_list[j+2]][conv_index[key]]
+            weights_pruned[bn_key_list[j+3]] = weights[bn_key_list[j+3]][conv_index[key]] 
+            j = j + 4
+            i = i + 1
+            filename = path + key + '.npy'
+            
+        weights_pruned['fc1.weight'] = weights['fc1.weight'][:,conv_index['conv_block6.conv2.weight']]
+
+        self.load_state_dict(weights_pruned)
+ 
+    def forward(self, input, mixup_lambda=None):
+        """
+        Input: (batch_size, data_length)"""
+
+        x = self.spectrogram_extractor(input)   # (batch_size, 1, time_steps, freq_bins)
+        x = self.logmel_extractor(x)    # (batch_size, 1, time_steps, mel_bins)
+
+        x = x.transpose(1, 3)
+        x = self.bn0(x)
+        x = x.transpose(1, 3)
+        
+        if self.training:
+            x = self.spec_augmenter(x)
+
+        # Mixup on spectrogram
+        if self.training and mixup_lambda is not None:
+            x = do_mixup(x, mixup_lambda)
+
+        x = self.conv_block1(x, pool_size=(2, 2), pool_type='avg')
+        x = F.dropout(x, p=0.2, training=self.training)
+        x = self.conv_block2(x, pool_size=(2, 2), pool_type='avg')
+        x = F.dropout(x, p=0.2, training=self.training)
+        x = self.conv_block3(x, pool_size=(2, 2), pool_type='avg')
+        x = F.dropout(x, p=0.2, training=self.training)
+        x = self.conv_block4(x, pool_size=(2, 2), pool_type='avg')
+        x = F.dropout(x, p=0.2, training=self.training)
+        x = self.conv_block5(x, pool_size=(2, 2), pool_type='avg')
+        x = F.dropout(x, p=0.2, training=self.training)
+        x = self.conv_block6(x, pool_size=(1, 1), pool_type='avg')
+        x = F.dropout(x, p=0.2, training=self.training)
+        x = torch.mean(x, dim=3)
+        
+        (x1, _) = torch.max(x, dim=2)
+        x2 = torch.mean(x, dim=2)
+        x = x1 + x2
+        x = F.dropout(x, p=0.5, training=self.training)
+        x = F.relu_(self.fc1(x))
+        embedding = F.dropout(x, p=0.5, training=self.training)
+        clipwise_output = torch.sigmoid(self.fc_audioset(x))
+        # clipwise_output = torch.log_softmax(self.fc_audioset(x))        
+        # clipwise_output = nn.functional.softmax(self.fc_audioset(x))        
+
+        output_dict = {'clipwise_output': clipwise_output, 'embedding': embedding}
+
+        return output_dict
+
+
+class Cnn14_pruned_v2(nn.Module):
+    def __init__(self, sample_rate, window_size, hop_size, mel_bins, fmin, 
+        fmax, classes_num, pooling_type, pooling_factor):
+        import os
+        import numpy as np
+        
+        super(Cnn14_pruned_v2, self).__init__()
+
+        window = 'hann'
+        center = True
+        pad_mode = 'reflect'
+        ref = 1.0
+        amin = 1e-10
+        top_db = None
+        from collections import OrderedDict
+        path = '/mnt/fast/nobackup/scratch4weeks/as0150/arshdeep/PANNs_pruning/sorted_Indexes/OP' #'/home/arshdeep/Pruning/PANNs_pruning/sorted_Indexes/OP/'   
+
+        p = 0.5
+        p1 = 0
+        p2 = 0
+        p3 = 0
+        p4 = 0
+        p5 = 0
+        p6 = 0
+        p7 = 0
+        p8 = 0
+        p9 = 0
+        p10 = 0
+        p11 = p
+        p12 = p
+
+        C1 = sorted(np.load(os.path.join(path,'conv_block1.conv1.weight.npy'))[int(64*p1):64])
+        C2= sorted(np.load(os.path.join(path,'conv_block1.conv2.weight.npy'))[int(64*p2):64])
+
+
+        C3 = sorted(np.load(os.path.join(path,'conv_block2.conv1.weight.npy'))[int(128*p3):128])
+        C4 = sorted(np.load(os.path.join(path,'conv_block2.conv2.weight.npy'))[int(128*p4):128])
+
+
+        C5 = sorted(np.load(os.path.join(path,'conv_block3.conv1.weight.npy'))[int(256*p5):256])
+        C6 = sorted(np.load(os.path.join(path,'conv_block3.conv2.weight.npy'))[int(256*p6):256])
+
+
+        C7 = sorted(np.load(os.path.join(path,'conv_block4.conv1.weight.npy'))[int(512*p7):512])
+        C8 = sorted(np.load(os.path.join(path,'conv_block4.conv2.weight.npy'))[int(512*p8):512])
+
+
+        C9 = sorted(np.load(os.path.join(path,'conv_block5.conv1.weight.npy'))[int(1024*p9):1024])
+        C10 = sorted(np.load(os.path.join(path,'conv_block5.conv2.weight.npy'))[int(1024*p10):1024])
+
+
+        C11 = sorted(np.load(os.path.join(path,'conv_block6.conv1.weight.npy'))[int(2048*p11):2048])
+        C12 = sorted(np.load(os.path.join(path,'conv_block6.conv2.weight.npy'))[int(2048*p12):2048])
+
+
+        conv_index = OrderedDict()
+
+        conv_index['conv_block1.conv1.weight'] = C1
+        conv_index['conv_block1.conv2.weight'] = C2
+        conv_index['conv_block2.conv1.weight'] = C3
+        conv_index['conv_block2.conv2.weight'] = C4
+
+
+        conv_index['conv_block3.conv1.weight'] = C5
+        conv_index['conv_block3.conv2.weight'] = C6
+        conv_index['conv_block4.conv1.weight'] = C7
+        conv_index['conv_block4.conv2.weight'] = C8
+
+        conv_index['conv_block5.conv1.weight'] = C9
+        conv_index['conv_block5.conv2.weight'] = C10
+        conv_index['conv_block6.conv1.weight'] = C11
+        conv_index['conv_block6.conv2.weight'] = C12
+
+        # Spectrogram extractor
+        self.spectrogram_extractor = Spectrogram(n_fft=window_size, hop_length=hop_size, 
+            win_length=window_size, window=window, center=center, pad_mode=pad_mode, 
+            freeze_parameters=True)
+
+        # Logmel feature extractor
+        self.logmel_extractor = LogmelFilterBank(sr=sample_rate, n_fft=window_size, 
+            n_mels=mel_bins, fmin=fmin, fmax=fmax, ref=ref, amin=amin, top_db=top_db, 
+            freeze_parameters=True)
+
+        # Spec augmenter
+        self.spec_augmenter = SpecAugmentation(time_drop_width=64, time_stripes_num=2, 
+            freq_drop_width=8, freq_stripes_num=2)
+
+        self.bn0 = nn.BatchNorm2d(64)
+
+        self.conv_block1 = ConvBlock_pruned(in_channels_1=1, out_channels_1=int(64*(1-p1)),out_channels_2=int(64*(1-p2)))
+        self.conv_block2 = ConvBlock_pruned(in_channels_1=int(64*(1-p2)), out_channels_1=int(128*(1-p3)),out_channels_2=int(128*(1-p4)))
+        self.conv_block3 = ConvBlock_pruned(in_channels_1=int(128*(1-p4)), out_channels_1=int(256*(1-p5)),out_channels_2=int(256*(1-p6)))
+        self.conv_block4 = ConvBlock_pruned(in_channels_1=int(256*(1-p6)), out_channels_1=int(512*(1-p7)),out_channels_2=int(512*(1-p8)))
+        self.conv_block5 = ConvBlock_pruned(in_channels_1=int(512*(1-p8)), out_channels_1=int(1024*(1-p9)),out_channels_2=int(1024*(1-p10)))
+        self.conv_block6 = ConvBlock_pruned(in_channels_1=int(1024*(1-p10)), out_channels_1=int((1-p11)*2048),out_channels_2=int(2048*(1-p12)))
+
+        self.fc1 = nn.Linear(int(2048*(1-p12)), 2048, bias=True)
+        self.fc_audioset = nn.Linear(2048, classes_num, bias=True)
+        
+        # self.init_weight()
+        checkpoint_path = '/mnt/fast/nobackup/scratch4weeks/as0150/arshdeep/PANNs_pruning/Cnn14_mAP=0.431.pth'
+        checkpoint = torch.load(checkpoint_path, map_location=torch.device('cpu'))
+
+        weights = checkpoint['model']
+        weights_pruned = checkpoint['model']
+
+        conv_key_list = ['conv_block1.conv1.weight', 'conv_block1.conv2.weight','conv_block2.conv1.weight', 'conv_block2.conv2.weight','conv_block3.conv1.weight', 'conv_block3.conv2.weight','conv_block4.conv1.weight', 'conv_block4.conv2.weight','conv_block5.conv1.weight', 'conv_block5.conv2.weight','conv_block6.conv1.weight', 'conv_block6.conv2.weight']
+        bn_key_list = ['conv_block1.bn1.weight', 'conv_block1.bn1.bias', 'conv_block1.bn1.running_mean', 'conv_block1.bn1.running_var','conv_block1.bn2.weight', 'conv_block1.bn2.bias', 'conv_block1.bn2.running_mean', 'conv_block1.bn2.running_var','conv_block2.bn1.weight', 'conv_block2.bn1.bias', 'conv_block2.bn1.running_mean', 'conv_block2.bn1.running_var','conv_block2.bn2.weight', 'conv_block2.bn2.bias', 'conv_block2.bn2.running_mean', 'conv_block2.bn2.running_var','conv_block3.bn1.weight', 'conv_block3.bn1.bias', 'conv_block3.bn1.running_mean', 'conv_block3.bn1.running_var','conv_block3.bn2.weight', 'conv_block3.bn2.bias', 'conv_block3.bn2.running_mean', 'conv_block3.bn2.running_var','conv_block4.bn1.weight', 'conv_block4.bn1.bias', 'conv_block4.bn1.running_mean', 'conv_block4.bn1.running_var','conv_block4.bn2.weight', 'conv_block4.bn2.bias', 'conv_block4.bn2.running_mean', 'conv_block4.bn2.running_var','conv_block5.bn1.weight', 'conv_block5.bn1.bias', 'conv_block5.bn1.running_mean', 'conv_block5.bn1.running_var','conv_block5.bn2.weight', 'conv_block5.bn2.bias', 'conv_block5.bn2.running_mean', 'conv_block5.bn2.running_var','conv_block6.bn1.weight', 'conv_block6.bn1.bias', 'conv_block6.bn1.running_mean', 'conv_block6.bn1.running_var','conv_block6.bn2.weight', 'conv_block6.bn2.bias', 'conv_block6.bn2.running_mean', 'conv_block6.bn2.running_var']
+        prev_conv_key_list =  ['conv_block1.conv1.weight', 'conv_block1.conv2.weight','conv_block2.conv1.weight', 'conv_block2.conv2.weight','conv_block3.conv1.weight', 'conv_block3.conv2.weight','conv_block4.conv1.weight', 'conv_block4.conv2.weight','conv_block5.conv1.weight', 'conv_block5.conv2.weight','conv_block6.conv1.weight']
+
+        Z = OrderedDict()
+        j = 0
+        i = 0
+        for key in conv_key_list:
+            W_2D = weights[key].numpy()
+            print(key, prev_conv_key_list[i-1])
+            if i == 0:
+                weights_pruned[key] = torch.tensor(W_2D[conv_index[key],:,:,:])
+            else:
+                weights_pruned[key] = torch.tensor(W_2D[conv_index[key],:,:,:][:,conv_index[prev_conv_key_list[i-1]],:,:])
+            weights_pruned[bn_key_list[j]] = weights[bn_key_list[j]][conv_index[key]]
+            weights_pruned[bn_key_list[j+1]] = weights[bn_key_list[j+1]][conv_index[key]]
+            weights_pruned[bn_key_list[j+2]] = weights[bn_key_list[j+2]][conv_index[key]]
+            weights_pruned[bn_key_list[j+3]] = weights[bn_key_list[j+3]][conv_index[key]] 
+            j = j + 4
+            i = i + 1
+            filename = path + key + '.npy'
+            
+        weights_pruned['fc1.weight'] = weights['fc1.weight'][:,conv_index['conv_block6.conv2.weight']]
+
+        self.load_state_dict(weights_pruned)
+ 
+    def forward(self, input, mixup_lambda=None):
+        """
+        Input: (batch_size, data_length)"""
+
+        x = self.spectrogram_extractor(input)   # (batch_size, 1, time_steps, freq_bins)
+        x = self.logmel_extractor(x)    # (batch_size, 1, time_steps, mel_bins)
+
+        x = x.transpose(1, 3)
+        x = self.bn0(x)
+        x = x.transpose(1, 3)
+        
+        if self.training:
+            x = self.spec_augmenter(x)
+
+        # Mixup on spectrogram
+        if self.training and mixup_lambda is not None:
+            x = do_mixup(x, mixup_lambda)
+
+        x = self.conv_block1(x, pool_size=(2, 2), pool_type='avg')
+        x = F.dropout(x, p=0.2, training=self.training)
+        x = self.conv_block2(x, pool_size=(2, 2), pool_type='avg')
+        x = F.dropout(x, p=0.2, training=self.training)
+        x = self.conv_block3(x, pool_size=(2, 2), pool_type='avg')
+        x = F.dropout(x, p=0.2, training=self.training)
+        x = self.conv_block4(x, pool_size=(2, 2), pool_type='avg')
+        x = F.dropout(x, p=0.2, training=self.training)
+        x = self.conv_block5(x, pool_size=(2, 2), pool_type='avg')
+        x = F.dropout(x, p=0.2, training=self.training)
+        x = self.conv_block6(x, pool_size=(1, 1), pool_type='avg')
+        x = F.dropout(x, p=0.2, training=self.training)
+        x = torch.mean(x, dim=3)
+        
+        (x1, _) = torch.max(x, dim=2)
+        x2 = torch.mean(x, dim=2)
+        x = x1 + x2
+        x = F.dropout(x, p=0.5, training=self.training)
+        x = F.relu_(self.fc1(x))
+        embedding = F.dropout(x, p=0.5, training=self.training)
+        clipwise_output = torch.sigmoid(self.fc_audioset(x))
+        # clipwise_output = torch.log_softmax(self.fc_audioset(x))        
+        # clipwise_output = nn.functional.softmax(self.fc_audioset(x))        
+
+        output_dict = {'clipwise_output': clipwise_output, 'embedding': embedding}
+
+        return output_dict
+
+class Cnn14_pruned_v3(nn.Module):
+    def __init__(self, sample_rate, window_size, hop_size, mel_bins, fmin, 
+        fmax, classes_num, pooling_type, pooling_factor):
+        import os
+        import numpy as np
+        
+        super(Cnn14_pruned_v3, self).__init__()
+
+        window = 'hann'
+        center = True
+        pad_mode = 'reflect'
+        ref = 1.0
+        amin = 1e-10
+        top_db = None
+        from collections import OrderedDict
+        path = '/mnt/fast/nobackup/scratch4weeks/as0150/arshdeep/PANNs_pruning/sorted_Indexes/OP' #'/home/arshdeep/Pruning/PANNs_pruning/sorted_Indexes/OP/'   
+
+        p = 0.75
+        p1 = 0
+        p2 = 0
+        p3 = 0
+        p4 = 0
+        p5 = 0
+        p6 = 0
+        p7 = 0
+        p8 = 0
+        p9 = 0
+        p10 = 0
+        p11 = p
+        p12 = p
+
+        C1 = sorted(np.load(os.path.join(path,'conv_block1.conv1.weight.npy'))[int(64*p1):64])
+        C2= sorted(np.load(os.path.join(path,'conv_block1.conv2.weight.npy'))[int(64*p2):64])
+
+
+        C3 = sorted(np.load(os.path.join(path,'conv_block2.conv1.weight.npy'))[int(128*p3):128])
+        C4 = sorted(np.load(os.path.join(path,'conv_block2.conv2.weight.npy'))[int(128*p4):128])
+
+
+        C5 = sorted(np.load(os.path.join(path,'conv_block3.conv1.weight.npy'))[int(256*p5):256])
+        C6 = sorted(np.load(os.path.join(path,'conv_block3.conv2.weight.npy'))[int(256*p6):256])
+
+
+        C7 = sorted(np.load(os.path.join(path,'conv_block4.conv1.weight.npy'))[int(512*p7):512])
+        C8 = sorted(np.load(os.path.join(path,'conv_block4.conv2.weight.npy'))[int(512*p8):512])
+
+
+        C9 = sorted(np.load(os.path.join(path,'conv_block5.conv1.weight.npy'))[int(1024*p9):1024])
+        C10 = sorted(np.load(os.path.join(path,'conv_block5.conv2.weight.npy'))[int(1024*p10):1024])
+
+
+        C11 = sorted(np.load(os.path.join(path,'conv_block6.conv1.weight.npy'))[int(2048*p11):2048])
+        C12 = sorted(np.load(os.path.join(path,'conv_block6.conv2.weight.npy'))[int(2048*p12):2048])
+
+
+        conv_index = OrderedDict()
+
+        conv_index['conv_block1.conv1.weight'] = C1
+        conv_index['conv_block1.conv2.weight'] = C2
+        conv_index['conv_block2.conv1.weight'] = C3
+        conv_index['conv_block2.conv2.weight'] = C4
+
+
+        conv_index['conv_block3.conv1.weight'] = C5
+        conv_index['conv_block3.conv2.weight'] = C6
+        conv_index['conv_block4.conv1.weight'] = C7
+        conv_index['conv_block4.conv2.weight'] = C8
+
+        conv_index['conv_block5.conv1.weight'] = C9
+        conv_index['conv_block5.conv2.weight'] = C10
+        conv_index['conv_block6.conv1.weight'] = C11
+        conv_index['conv_block6.conv2.weight'] = C12
+
+        # Spectrogram extractor
+        self.spectrogram_extractor = Spectrogram(n_fft=window_size, hop_length=hop_size, 
+            win_length=window_size, window=window, center=center, pad_mode=pad_mode, 
+            freeze_parameters=True)
+
+        # Logmel feature extractor
+        self.logmel_extractor = LogmelFilterBank(sr=sample_rate, n_fft=window_size, 
+            n_mels=mel_bins, fmin=fmin, fmax=fmax, ref=ref, amin=amin, top_db=top_db, 
+            freeze_parameters=True)
+
+        # Spec augmenter
+        self.spec_augmenter = SpecAugmentation(time_drop_width=64, time_stripes_num=2, 
+            freq_drop_width=8, freq_stripes_num=2)
+
+        self.bn0 = nn.BatchNorm2d(64)
+
+        self.conv_block1 = ConvBlock_pruned(in_channels_1=1, out_channels_1=int(64*(1-p1)),out_channels_2=int(64*(1-p2)))
+        self.conv_block2 = ConvBlock_pruned(in_channels_1=int(64*(1-p2)), out_channels_1=int(128*(1-p3)),out_channels_2=int(128*(1-p4)))
+        self.conv_block3 = ConvBlock_pruned(in_channels_1=int(128*(1-p4)), out_channels_1=int(256*(1-p5)),out_channels_2=int(256*(1-p6)))
+        self.conv_block4 = ConvBlock_pruned(in_channels_1=int(256*(1-p6)), out_channels_1=int(512*(1-p7)),out_channels_2=int(512*(1-p8)))
+        self.conv_block5 = ConvBlock_pruned(in_channels_1=int(512*(1-p8)), out_channels_1=int(1024*(1-p9)),out_channels_2=int(1024*(1-p10)))
+        self.conv_block6 = ConvBlock_pruned(in_channels_1=int(1024*(1-p10)), out_channels_1=int((1-p11)*2048),out_channels_2=int(2048*(1-p12)))
+
+        self.fc1 = nn.Linear(int(2048*(1-p12)), 2048, bias=True)
+        self.fc_audioset = nn.Linear(2048, classes_num, bias=True)
+        
+        # self.init_weight()
+        checkpoint_path = '/mnt/fast/nobackup/scratch4weeks/as0150/arshdeep/PANNs_pruning/Cnn14_mAP=0.431.pth'
+        checkpoint = torch.load(checkpoint_path, map_location=torch.device('cpu'))
+
+        weights = checkpoint['model']
+        weights_pruned = checkpoint['model']
+
+        conv_key_list = ['conv_block1.conv1.weight', 'conv_block1.conv2.weight','conv_block2.conv1.weight', 'conv_block2.conv2.weight','conv_block3.conv1.weight', 'conv_block3.conv2.weight','conv_block4.conv1.weight', 'conv_block4.conv2.weight','conv_block5.conv1.weight', 'conv_block5.conv2.weight','conv_block6.conv1.weight', 'conv_block6.conv2.weight']
+        bn_key_list = ['conv_block1.bn1.weight', 'conv_block1.bn1.bias', 'conv_block1.bn1.running_mean', 'conv_block1.bn1.running_var','conv_block1.bn2.weight', 'conv_block1.bn2.bias', 'conv_block1.bn2.running_mean', 'conv_block1.bn2.running_var','conv_block2.bn1.weight', 'conv_block2.bn1.bias', 'conv_block2.bn1.running_mean', 'conv_block2.bn1.running_var','conv_block2.bn2.weight', 'conv_block2.bn2.bias', 'conv_block2.bn2.running_mean', 'conv_block2.bn2.running_var','conv_block3.bn1.weight', 'conv_block3.bn1.bias', 'conv_block3.bn1.running_mean', 'conv_block3.bn1.running_var','conv_block3.bn2.weight', 'conv_block3.bn2.bias', 'conv_block3.bn2.running_mean', 'conv_block3.bn2.running_var','conv_block4.bn1.weight', 'conv_block4.bn1.bias', 'conv_block4.bn1.running_mean', 'conv_block4.bn1.running_var','conv_block4.bn2.weight', 'conv_block4.bn2.bias', 'conv_block4.bn2.running_mean', 'conv_block4.bn2.running_var','conv_block5.bn1.weight', 'conv_block5.bn1.bias', 'conv_block5.bn1.running_mean', 'conv_block5.bn1.running_var','conv_block5.bn2.weight', 'conv_block5.bn2.bias', 'conv_block5.bn2.running_mean', 'conv_block5.bn2.running_var','conv_block6.bn1.weight', 'conv_block6.bn1.bias', 'conv_block6.bn1.running_mean', 'conv_block6.bn1.running_var','conv_block6.bn2.weight', 'conv_block6.bn2.bias', 'conv_block6.bn2.running_mean', 'conv_block6.bn2.running_var']
+        prev_conv_key_list =  ['conv_block1.conv1.weight', 'conv_block1.conv2.weight','conv_block2.conv1.weight', 'conv_block2.conv2.weight','conv_block3.conv1.weight', 'conv_block3.conv2.weight','conv_block4.conv1.weight', 'conv_block4.conv2.weight','conv_block5.conv1.weight', 'conv_block5.conv2.weight','conv_block6.conv1.weight']
+
+        Z = OrderedDict()
+        j = 0
+        i = 0
+        for key in conv_key_list:
+            W_2D = weights[key].numpy()
+            print(key, prev_conv_key_list[i-1])
+            if i == 0:
+                weights_pruned[key] = torch.tensor(W_2D[conv_index[key],:,:,:])
+            else:
+                weights_pruned[key] = torch.tensor(W_2D[conv_index[key],:,:,:][:,conv_index[prev_conv_key_list[i-1]],:,:])
+            weights_pruned[bn_key_list[j]] = weights[bn_key_list[j]][conv_index[key]]
+            weights_pruned[bn_key_list[j+1]] = weights[bn_key_list[j+1]][conv_index[key]]
+            weights_pruned[bn_key_list[j+2]] = weights[bn_key_list[j+2]][conv_index[key]]
+            weights_pruned[bn_key_list[j+3]] = weights[bn_key_list[j+3]][conv_index[key]] 
+            j = j + 4
+            i = i + 1
+            filename = path + key + '.npy'
+            
+        weights_pruned['fc1.weight'] = weights['fc1.weight'][:,conv_index['conv_block6.conv2.weight']]
+
+        self.load_state_dict(weights_pruned)
+ 
+    def forward(self, input, mixup_lambda=None):
+        """
+        Input: (batch_size, data_length)"""
+
+        x = self.spectrogram_extractor(input)   # (batch_size, 1, time_steps, freq_bins)
+        x = self.logmel_extractor(x)    # (batch_size, 1, time_steps, mel_bins)
+
+        x = x.transpose(1, 3)
+        x = self.bn0(x)
+        x = x.transpose(1, 3)
+        
+        if self.training:
+            x = self.spec_augmenter(x)
+
+        # Mixup on spectrogram
+        if self.training and mixup_lambda is not None:
+            x = do_mixup(x, mixup_lambda)
+
+        x = self.conv_block1(x, pool_size=(2, 2), pool_type='avg')
+        x = F.dropout(x, p=0.2, training=self.training)
+        x = self.conv_block2(x, pool_size=(2, 2), pool_type='avg')
+        x = F.dropout(x, p=0.2, training=self.training)
+        x = self.conv_block3(x, pool_size=(2, 2), pool_type='avg')
+        x = F.dropout(x, p=0.2, training=self.training)
+        x = self.conv_block4(x, pool_size=(2, 2), pool_type='avg')
+        x = F.dropout(x, p=0.2, training=self.training)
+        x = self.conv_block5(x, pool_size=(2, 2), pool_type='avg')
+        x = F.dropout(x, p=0.2, training=self.training)
+        x = self.conv_block6(x, pool_size=(1, 1), pool_type='avg')
+        x = F.dropout(x, p=0.2, training=self.training)
+        x = torch.mean(x, dim=3)
+        
+        (x1, _) = torch.max(x, dim=2)
+        x2 = torch.mean(x, dim=2)
+        x = x1 + x2
+        x = F.dropout(x, p=0.5, training=self.training)
+        x = F.relu_(self.fc1(x))
+        embedding = F.dropout(x, p=0.5, training=self.training)
+        clipwise_output = torch.sigmoid(self.fc_audioset(x))
+        # clipwise_output = torch.log_softmax(self.fc_audioset(x))        
+        # clipwise_output = nn.functional.softmax(self.fc_audioset(x))        
+
+        output_dict = {'clipwise_output': clipwise_output, 'embedding': embedding}
+
+        return output_dict
+
+
+class Cnn14_pruned_v4(nn.Module):
+    def __init__(self, sample_rate, window_size, hop_size, mel_bins, fmin, 
+        fmax, classes_num, pooling_type, pooling_factor):
+        import os
+        import numpy as np
+        
+        super(Cnn14_pruned_v4, self).__init__()
+
+        window = 'hann'
+        center = True
+        pad_mode = 'reflect'
+        ref = 1.0
+        amin = 1e-10
+        top_db = None
+        from collections import OrderedDict
+        path = '/mnt/fast/nobackup/scratch4weeks/as0150/arshdeep/PANNs_pruning/sorted_Indexes/OP' #'/home/arshdeep/Pruning/PANNs_pruning/sorted_Indexes/OP/'   
+
+        p = 0.25
+        p1 = 0
+        p2 = 0
+        p3 = 0
+        p4 = 0
+        p5 = 0
+        p6 = 0
+        p7 = p
+        p8 = p
+        p9 = p
+        p10 = p
+        p11 = p
+        p12 = p
+
+        C1 = sorted(np.load(os.path.join(path,'conv_block1.conv1.weight.npy'))[int(64*p1):64])
+        C2= sorted(np.load(os.path.join(path,'conv_block1.conv2.weight.npy'))[int(64*p2):64])
+
+
+        C3 = sorted(np.load(os.path.join(path,'conv_block2.conv1.weight.npy'))[int(128*p3):128])
+        C4 = sorted(np.load(os.path.join(path,'conv_block2.conv2.weight.npy'))[int(128*p4):128])
+
+
+        C5 = sorted(np.load(os.path.join(path,'conv_block3.conv1.weight.npy'))[int(256*p5):256])
+        C6 = sorted(np.load(os.path.join(path,'conv_block3.conv2.weight.npy'))[int(256*p6):256])
+
+
+        C7 = sorted(np.load(os.path.join(path,'conv_block4.conv1.weight.npy'))[int(512*p7):512])
+        C8 = sorted(np.load(os.path.join(path,'conv_block4.conv2.weight.npy'))[int(512*p8):512])
+
+
+        C9 = sorted(np.load(os.path.join(path,'conv_block5.conv1.weight.npy'))[int(1024*p9):1024])
+        C10 = sorted(np.load(os.path.join(path,'conv_block5.conv2.weight.npy'))[int(1024*p10):1024])
+
+
+        C11 = sorted(np.load(os.path.join(path,'conv_block6.conv1.weight.npy'))[int(2048*p11):2048])
+        C12 = sorted(np.load(os.path.join(path,'conv_block6.conv2.weight.npy'))[int(2048*p12):2048])
+
+
+        conv_index = OrderedDict()
+
+        conv_index['conv_block1.conv1.weight'] = C1
+        conv_index['conv_block1.conv2.weight'] = C2
+        conv_index['conv_block2.conv1.weight'] = C3
+        conv_index['conv_block2.conv2.weight'] = C4
+
+
+        conv_index['conv_block3.conv1.weight'] = C5
+        conv_index['conv_block3.conv2.weight'] = C6
+        conv_index['conv_block4.conv1.weight'] = C7
+        conv_index['conv_block4.conv2.weight'] = C8
+
+        conv_index['conv_block5.conv1.weight'] = C9
+        conv_index['conv_block5.conv2.weight'] = C10
+        conv_index['conv_block6.conv1.weight'] = C11
+        conv_index['conv_block6.conv2.weight'] = C12
+
+        # Spectrogram extractor
+        self.spectrogram_extractor = Spectrogram(n_fft=window_size, hop_length=hop_size, 
+            win_length=window_size, window=window, center=center, pad_mode=pad_mode, 
+            freeze_parameters=True)
+
+        # Logmel feature extractor
+        self.logmel_extractor = LogmelFilterBank(sr=sample_rate, n_fft=window_size, 
+            n_mels=mel_bins, fmin=fmin, fmax=fmax, ref=ref, amin=amin, top_db=top_db, 
+            freeze_parameters=True)
+
+        # Spec augmenter
+        self.spec_augmenter = SpecAugmentation(time_drop_width=64, time_stripes_num=2, 
+            freq_drop_width=8, freq_stripes_num=2)
+
+        self.bn0 = nn.BatchNorm2d(64)
+
+        self.conv_block1 = ConvBlock_pruned(in_channels_1=1, out_channels_1=int(64*(1-p1)),out_channels_2=int(64*(1-p2)))
+        self.conv_block2 = ConvBlock_pruned(in_channels_1=int(64*(1-p2)), out_channels_1=int(128*(1-p3)),out_channels_2=int(128*(1-p4)))
+        self.conv_block3 = ConvBlock_pruned(in_channels_1=int(128*(1-p4)), out_channels_1=int(256*(1-p5)),out_channels_2=int(256*(1-p6)))
+        self.conv_block4 = ConvBlock_pruned(in_channels_1=int(256*(1-p6)), out_channels_1=int(512*(1-p7)),out_channels_2=int(512*(1-p8)))
+        self.conv_block5 = ConvBlock_pruned(in_channels_1=int(512*(1-p8)), out_channels_1=int(1024*(1-p9)),out_channels_2=int(1024*(1-p10)))
+        self.conv_block6 = ConvBlock_pruned(in_channels_1=int(1024*(1-p10)), out_channels_1=int((1-p11)*2048),out_channels_2=int(2048*(1-p12)))
+
+        self.fc1 = nn.Linear(int(2048*(1-p12)), 2048, bias=True)
+        self.fc_audioset = nn.Linear(2048, classes_num, bias=True)
+        
+        # self.init_weight()
+        checkpoint_path = '/mnt/fast/nobackup/scratch4weeks/as0150/arshdeep/PANNs_pruning/Cnn14_mAP=0.431.pth'
+        checkpoint = torch.load(checkpoint_path, map_location=torch.device('cpu'))
+
+        weights = checkpoint['model']
+        weights_pruned = checkpoint['model']
+
+        conv_key_list = ['conv_block1.conv1.weight', 'conv_block1.conv2.weight','conv_block2.conv1.weight', 'conv_block2.conv2.weight','conv_block3.conv1.weight', 'conv_block3.conv2.weight','conv_block4.conv1.weight', 'conv_block4.conv2.weight','conv_block5.conv1.weight', 'conv_block5.conv2.weight','conv_block6.conv1.weight', 'conv_block6.conv2.weight']
+        bn_key_list = ['conv_block1.bn1.weight', 'conv_block1.bn1.bias', 'conv_block1.bn1.running_mean', 'conv_block1.bn1.running_var','conv_block1.bn2.weight', 'conv_block1.bn2.bias', 'conv_block1.bn2.running_mean', 'conv_block1.bn2.running_var','conv_block2.bn1.weight', 'conv_block2.bn1.bias', 'conv_block2.bn1.running_mean', 'conv_block2.bn1.running_var','conv_block2.bn2.weight', 'conv_block2.bn2.bias', 'conv_block2.bn2.running_mean', 'conv_block2.bn2.running_var','conv_block3.bn1.weight', 'conv_block3.bn1.bias', 'conv_block3.bn1.running_mean', 'conv_block3.bn1.running_var','conv_block3.bn2.weight', 'conv_block3.bn2.bias', 'conv_block3.bn2.running_mean', 'conv_block3.bn2.running_var','conv_block4.bn1.weight', 'conv_block4.bn1.bias', 'conv_block4.bn1.running_mean', 'conv_block4.bn1.running_var','conv_block4.bn2.weight', 'conv_block4.bn2.bias', 'conv_block4.bn2.running_mean', 'conv_block4.bn2.running_var','conv_block5.bn1.weight', 'conv_block5.bn1.bias', 'conv_block5.bn1.running_mean', 'conv_block5.bn1.running_var','conv_block5.bn2.weight', 'conv_block5.bn2.bias', 'conv_block5.bn2.running_mean', 'conv_block5.bn2.running_var','conv_block6.bn1.weight', 'conv_block6.bn1.bias', 'conv_block6.bn1.running_mean', 'conv_block6.bn1.running_var','conv_block6.bn2.weight', 'conv_block6.bn2.bias', 'conv_block6.bn2.running_mean', 'conv_block6.bn2.running_var']
+        prev_conv_key_list =  ['conv_block1.conv1.weight', 'conv_block1.conv2.weight','conv_block2.conv1.weight', 'conv_block2.conv2.weight','conv_block3.conv1.weight', 'conv_block3.conv2.weight','conv_block4.conv1.weight', 'conv_block4.conv2.weight','conv_block5.conv1.weight', 'conv_block5.conv2.weight','conv_block6.conv1.weight']
+
+        Z = OrderedDict()
+        j = 0
+        i = 0
+        for key in conv_key_list:
+            W_2D = weights[key].numpy()
+            print(key, prev_conv_key_list[i-1])
+            if i == 0:
+                weights_pruned[key] = torch.tensor(W_2D[conv_index[key],:,:,:])
+            else:
+                weights_pruned[key] = torch.tensor(W_2D[conv_index[key],:,:,:][:,conv_index[prev_conv_key_list[i-1]],:,:])
+            weights_pruned[bn_key_list[j]] = weights[bn_key_list[j]][conv_index[key]]
+            weights_pruned[bn_key_list[j+1]] = weights[bn_key_list[j+1]][conv_index[key]]
+            weights_pruned[bn_key_list[j+2]] = weights[bn_key_list[j+2]][conv_index[key]]
+            weights_pruned[bn_key_list[j+3]] = weights[bn_key_list[j+3]][conv_index[key]] 
+            j = j + 4
+            i = i + 1
+            filename = path + key + '.npy'
+            
+        weights_pruned['fc1.weight'] = weights['fc1.weight'][:,conv_index['conv_block6.conv2.weight']]
+
+        self.load_state_dict(weights_pruned)
+ 
+    def forward(self, input, mixup_lambda=None):
+        """
+        Input: (batch_size, data_length)"""
+
+        x = self.spectrogram_extractor(input)   # (batch_size, 1, time_steps, freq_bins)
+        x = self.logmel_extractor(x)    # (batch_size, 1, time_steps, mel_bins)
+
+        x = x.transpose(1, 3)
+        x = self.bn0(x)
+        x = x.transpose(1, 3)
+        
+        if self.training:
+            x = self.spec_augmenter(x)
+
+        # Mixup on spectrogram
+        if self.training and mixup_lambda is not None:
+            x = do_mixup(x, mixup_lambda)
+
+        x = self.conv_block1(x, pool_size=(2, 2), pool_type='avg')
+        x = F.dropout(x, p=0.2, training=self.training)
+        x = self.conv_block2(x, pool_size=(2, 2), pool_type='avg')
+        x = F.dropout(x, p=0.2, training=self.training)
+        x = self.conv_block3(x, pool_size=(2, 2), pool_type='avg')
+        x = F.dropout(x, p=0.2, training=self.training)
+        x = self.conv_block4(x, pool_size=(2, 2), pool_type='avg')
+        x = F.dropout(x, p=0.2, training=self.training)
+        x = self.conv_block5(x, pool_size=(2, 2), pool_type='avg')
+        x = F.dropout(x, p=0.2, training=self.training)
+        x = self.conv_block6(x, pool_size=(1, 1), pool_type='avg')
+        x = F.dropout(x, p=0.2, training=self.training)
+        x = torch.mean(x, dim=3)
+        
+        (x1, _) = torch.max(x, dim=2)
+        x2 = torch.mean(x, dim=2)
+        x = x1 + x2
+        x = F.dropout(x, p=0.5, training=self.training)
+        x = F.relu_(self.fc1(x))
+        embedding = F.dropout(x, p=0.5, training=self.training)
+        clipwise_output = torch.sigmoid(self.fc_audioset(x))
+        # clipwise_output = torch.log_softmax(self.fc_audioset(x))        
+        # clipwise_output = nn.functional.softmax(self.fc_audioset(x))        
+
+        output_dict = {'clipwise_output': clipwise_output, 'embedding': embedding}
+
+        return output_dict
     
 
+class Cnn14_pruned_v5(nn.Module):
+    def __init__(self, sample_rate, window_size, hop_size, mel_bins, fmin, 
+        fmax, classes_num, pooling_type, pooling_factor):
+        import os
+        import numpy as np
+        
+        super(Cnn14_pruned_v5, self).__init__()
+
+        window = 'hann'
+        center = True
+        pad_mode = 'reflect'
+        ref = 1.0
+        amin = 1e-10
+        top_db = None
+        from collections import OrderedDict
+        path = '/mnt/fast/nobackup/scratch4weeks/as0150/arshdeep/PANNs_pruning/sorted_Indexes/OP' #'/home/arshdeep/Pruning/PANNs_pruning/sorted_Indexes/OP/'   
+
+        p = 0.5
+        p1 = 0
+        p2 = 0
+        p3 = 0
+        p4 = 0
+        p5 = 0
+        p6 = 0
+        p7 = p
+        p8 = p
+        p9 = p
+        p10 = p
+        p11 = p
+        p12 = p
+
+        C1 = sorted(np.load(os.path.join(path,'conv_block1.conv1.weight.npy'))[int(64*p1):64])
+        C2= sorted(np.load(os.path.join(path,'conv_block1.conv2.weight.npy'))[int(64*p2):64])
+
+
+        C3 = sorted(np.load(os.path.join(path,'conv_block2.conv1.weight.npy'))[int(128*p3):128])
+        C4 = sorted(np.load(os.path.join(path,'conv_block2.conv2.weight.npy'))[int(128*p4):128])
+
+
+        C5 = sorted(np.load(os.path.join(path,'conv_block3.conv1.weight.npy'))[int(256*p5):256])
+        C6 = sorted(np.load(os.path.join(path,'conv_block3.conv2.weight.npy'))[int(256*p6):256])
+
+
+        C7 = sorted(np.load(os.path.join(path,'conv_block4.conv1.weight.npy'))[int(512*p7):512])
+        C8 = sorted(np.load(os.path.join(path,'conv_block4.conv2.weight.npy'))[int(512*p8):512])
+
+
+        C9 = sorted(np.load(os.path.join(path,'conv_block5.conv1.weight.npy'))[int(1024*p9):1024])
+        C10 = sorted(np.load(os.path.join(path,'conv_block5.conv2.weight.npy'))[int(1024*p10):1024])
+
+
+        C11 = sorted(np.load(os.path.join(path,'conv_block6.conv1.weight.npy'))[int(2048*p11):2048])
+        C12 = sorted(np.load(os.path.join(path,'conv_block6.conv2.weight.npy'))[int(2048*p12):2048])
+
+
+        conv_index = OrderedDict()
+
+        conv_index['conv_block1.conv1.weight'] = C1
+        conv_index['conv_block1.conv2.weight'] = C2
+        conv_index['conv_block2.conv1.weight'] = C3
+        conv_index['conv_block2.conv2.weight'] = C4
+
+
+        conv_index['conv_block3.conv1.weight'] = C5
+        conv_index['conv_block3.conv2.weight'] = C6
+        conv_index['conv_block4.conv1.weight'] = C7
+        conv_index['conv_block4.conv2.weight'] = C8
+
+        conv_index['conv_block5.conv1.weight'] = C9
+        conv_index['conv_block5.conv2.weight'] = C10
+        conv_index['conv_block6.conv1.weight'] = C11
+        conv_index['conv_block6.conv2.weight'] = C12
+
+        # Spectrogram extractor
+        self.spectrogram_extractor = Spectrogram(n_fft=window_size, hop_length=hop_size, 
+            win_length=window_size, window=window, center=center, pad_mode=pad_mode, 
+            freeze_parameters=True)
+
+        # Logmel feature extractor
+        self.logmel_extractor = LogmelFilterBank(sr=sample_rate, n_fft=window_size, 
+            n_mels=mel_bins, fmin=fmin, fmax=fmax, ref=ref, amin=amin, top_db=top_db, 
+            freeze_parameters=True)
+
+        # Spec augmenter
+        self.spec_augmenter = SpecAugmentation(time_drop_width=64, time_stripes_num=2, 
+            freq_drop_width=8, freq_stripes_num=2)
+
+        self.bn0 = nn.BatchNorm2d(64)
+
+        self.conv_block1 = ConvBlock_pruned(in_channels_1=1, out_channels_1=int(64*(1-p1)),out_channels_2=int(64*(1-p2)))
+        self.conv_block2 = ConvBlock_pruned(in_channels_1=int(64*(1-p2)), out_channels_1=int(128*(1-p3)),out_channels_2=int(128*(1-p4)))
+        self.conv_block3 = ConvBlock_pruned(in_channels_1=int(128*(1-p4)), out_channels_1=int(256*(1-p5)),out_channels_2=int(256*(1-p6)))
+        self.conv_block4 = ConvBlock_pruned(in_channels_1=int(256*(1-p6)), out_channels_1=int(512*(1-p7)),out_channels_2=int(512*(1-p8)))
+        self.conv_block5 = ConvBlock_pruned(in_channels_1=int(512*(1-p8)), out_channels_1=int(1024*(1-p9)),out_channels_2=int(1024*(1-p10)))
+        self.conv_block6 = ConvBlock_pruned(in_channels_1=int(1024*(1-p10)), out_channels_1=int((1-p11)*2048),out_channels_2=int(2048*(1-p12)))
+
+        self.fc1 = nn.Linear(int(2048*(1-p12)), 2048, bias=True)
+        self.fc_audioset = nn.Linear(2048, classes_num, bias=True)
+        
+        # self.init_weight()
+        checkpoint_path = '/mnt/fast/nobackup/scratch4weeks/as0150/arshdeep/PANNs_pruning/Cnn14_mAP=0.431.pth'
+        checkpoint = torch.load(checkpoint_path, map_location=torch.device('cpu'))
+
+        weights = checkpoint['model']
+        weights_pruned = checkpoint['model']
+
+        conv_key_list = ['conv_block1.conv1.weight', 'conv_block1.conv2.weight','conv_block2.conv1.weight', 'conv_block2.conv2.weight','conv_block3.conv1.weight', 'conv_block3.conv2.weight','conv_block4.conv1.weight', 'conv_block4.conv2.weight','conv_block5.conv1.weight', 'conv_block5.conv2.weight','conv_block6.conv1.weight', 'conv_block6.conv2.weight']
+        bn_key_list = ['conv_block1.bn1.weight', 'conv_block1.bn1.bias', 'conv_block1.bn1.running_mean', 'conv_block1.bn1.running_var','conv_block1.bn2.weight', 'conv_block1.bn2.bias', 'conv_block1.bn2.running_mean', 'conv_block1.bn2.running_var','conv_block2.bn1.weight', 'conv_block2.bn1.bias', 'conv_block2.bn1.running_mean', 'conv_block2.bn1.running_var','conv_block2.bn2.weight', 'conv_block2.bn2.bias', 'conv_block2.bn2.running_mean', 'conv_block2.bn2.running_var','conv_block3.bn1.weight', 'conv_block3.bn1.bias', 'conv_block3.bn1.running_mean', 'conv_block3.bn1.running_var','conv_block3.bn2.weight', 'conv_block3.bn2.bias', 'conv_block3.bn2.running_mean', 'conv_block3.bn2.running_var','conv_block4.bn1.weight', 'conv_block4.bn1.bias', 'conv_block4.bn1.running_mean', 'conv_block4.bn1.running_var','conv_block4.bn2.weight', 'conv_block4.bn2.bias', 'conv_block4.bn2.running_mean', 'conv_block4.bn2.running_var','conv_block5.bn1.weight', 'conv_block5.bn1.bias', 'conv_block5.bn1.running_mean', 'conv_block5.bn1.running_var','conv_block5.bn2.weight', 'conv_block5.bn2.bias', 'conv_block5.bn2.running_mean', 'conv_block5.bn2.running_var','conv_block6.bn1.weight', 'conv_block6.bn1.bias', 'conv_block6.bn1.running_mean', 'conv_block6.bn1.running_var','conv_block6.bn2.weight', 'conv_block6.bn2.bias', 'conv_block6.bn2.running_mean', 'conv_block6.bn2.running_var']
+        prev_conv_key_list =  ['conv_block1.conv1.weight', 'conv_block1.conv2.weight','conv_block2.conv1.weight', 'conv_block2.conv2.weight','conv_block3.conv1.weight', 'conv_block3.conv2.weight','conv_block4.conv1.weight', 'conv_block4.conv2.weight','conv_block5.conv1.weight', 'conv_block5.conv2.weight','conv_block6.conv1.weight']
+
+        Z = OrderedDict()
+        j = 0
+        i = 0
+        for key in conv_key_list:
+            W_2D = weights[key].numpy()
+            print(key, prev_conv_key_list[i-1])
+            if i == 0:
+                weights_pruned[key] = torch.tensor(W_2D[conv_index[key],:,:,:])
+            else:
+                weights_pruned[key] = torch.tensor(W_2D[conv_index[key],:,:,:][:,conv_index[prev_conv_key_list[i-1]],:,:])
+            weights_pruned[bn_key_list[j]] = weights[bn_key_list[j]][conv_index[key]]
+            weights_pruned[bn_key_list[j+1]] = weights[bn_key_list[j+1]][conv_index[key]]
+            weights_pruned[bn_key_list[j+2]] = weights[bn_key_list[j+2]][conv_index[key]]
+            weights_pruned[bn_key_list[j+3]] = weights[bn_key_list[j+3]][conv_index[key]] 
+            j = j + 4
+            i = i + 1
+            filename = path + key + '.npy'
+            
+        weights_pruned['fc1.weight'] = weights['fc1.weight'][:,conv_index['conv_block6.conv2.weight']]
+
+        self.load_state_dict(weights_pruned)
+ 
+    def forward(self, input, mixup_lambda=None):
+        """
+        Input: (batch_size, data_length)"""
+
+        x = self.spectrogram_extractor(input)   # (batch_size, 1, time_steps, freq_bins)
+        x = self.logmel_extractor(x)    # (batch_size, 1, time_steps, mel_bins)
+
+        x = x.transpose(1, 3)
+        x = self.bn0(x)
+        x = x.transpose(1, 3)
+        
+        if self.training:
+            x = self.spec_augmenter(x)
+
+        # Mixup on spectrogram
+        if self.training and mixup_lambda is not None:
+            x = do_mixup(x, mixup_lambda)
+
+        x = self.conv_block1(x, pool_size=(2, 2), pool_type='avg')
+        x = F.dropout(x, p=0.2, training=self.training)
+        x = self.conv_block2(x, pool_size=(2, 2), pool_type='avg')
+        x = F.dropout(x, p=0.2, training=self.training)
+        x = self.conv_block3(x, pool_size=(2, 2), pool_type='avg')
+        x = F.dropout(x, p=0.2, training=self.training)
+        x = self.conv_block4(x, pool_size=(2, 2), pool_type='avg')
+        x = F.dropout(x, p=0.2, training=self.training)
+        x = self.conv_block5(x, pool_size=(2, 2), pool_type='avg')
+        x = F.dropout(x, p=0.2, training=self.training)
+        x = self.conv_block6(x, pool_size=(1, 1), pool_type='avg')
+        x = F.dropout(x, p=0.2, training=self.training)
+        x = torch.mean(x, dim=3)
+        
+        (x1, _) = torch.max(x, dim=2)
+        x2 = torch.mean(x, dim=2)
+        x = x1 + x2
+        x = F.dropout(x, p=0.5, training=self.training)
+        x = F.relu_(self.fc1(x))
+        embedding = F.dropout(x, p=0.5, training=self.training)
+        clipwise_output = torch.sigmoid(self.fc_audioset(x))
+        # clipwise_output = torch.log_softmax(self.fc_audioset(x))        
+        # clipwise_output = nn.functional.softmax(self.fc_audioset(x))        
+
+        output_dict = {'clipwise_output': clipwise_output, 'embedding': embedding}
+
+        return output_dict
+
+class Cnn14_pruned_v6(nn.Module):
+    def __init__(self, sample_rate, window_size, hop_size, mel_bins, fmin, 
+        fmax, classes_num, pooling_type, pooling_factor):
+        import os
+        import numpy as np
+        
+        super(Cnn14_pruned_v6, self).__init__()
+
+        window = 'hann'
+        center = True
+        pad_mode = 'reflect'
+        ref = 1.0
+        amin = 1e-10
+        top_db = None
+        from collections import OrderedDict
+        path = '/mnt/fast/nobackup/scratch4weeks/as0150/arshdeep/PANNs_pruning/sorted_Indexes/OP' #'/home/arshdeep/Pruning/PANNs_pruning/sorted_Indexes/OP/'   
+
+        p = 0.25
+        p1 = p
+        p2 = p
+        p3 = p
+        p4 = p
+        p5 = p
+        p6 = p
+        p7 = p
+        p8 = p
+        p9 = p
+        p10 = p
+        p11 = p
+        p12 = p
+
+        C1 = sorted(np.load(os.path.join(path,'conv_block1.conv1.weight.npy'))[int(64*p1):64])
+        C2= sorted(np.load(os.path.join(path,'conv_block1.conv2.weight.npy'))[int(64*p2):64])
+
+
+        C3 = sorted(np.load(os.path.join(path,'conv_block2.conv1.weight.npy'))[int(128*p3):128])
+        C4 = sorted(np.load(os.path.join(path,'conv_block2.conv2.weight.npy'))[int(128*p4):128])
+
+
+        C5 = sorted(np.load(os.path.join(path,'conv_block3.conv1.weight.npy'))[int(256*p5):256])
+        C6 = sorted(np.load(os.path.join(path,'conv_block3.conv2.weight.npy'))[int(256*p6):256])
+
+
+        C7 = sorted(np.load(os.path.join(path,'conv_block4.conv1.weight.npy'))[int(512*p7):512])
+        C8 = sorted(np.load(os.path.join(path,'conv_block4.conv2.weight.npy'))[int(512*p8):512])
+
+
+        C9 = sorted(np.load(os.path.join(path,'conv_block5.conv1.weight.npy'))[int(1024*p9):1024])
+        C10 = sorted(np.load(os.path.join(path,'conv_block5.conv2.weight.npy'))[int(1024*p10):1024])
+
+
+        C11 = sorted(np.load(os.path.join(path,'conv_block6.conv1.weight.npy'))[int(2048*p11):2048])
+        C12 = sorted(np.load(os.path.join(path,'conv_block6.conv2.weight.npy'))[int(2048*p12):2048])
+
+
+        conv_index = OrderedDict()
+
+        conv_index['conv_block1.conv1.weight'] = C1
+        conv_index['conv_block1.conv2.weight'] = C2
+        conv_index['conv_block2.conv1.weight'] = C3
+        conv_index['conv_block2.conv2.weight'] = C4
+
+
+        conv_index['conv_block3.conv1.weight'] = C5
+        conv_index['conv_block3.conv2.weight'] = C6
+        conv_index['conv_block4.conv1.weight'] = C7
+        conv_index['conv_block4.conv2.weight'] = C8
+
+        conv_index['conv_block5.conv1.weight'] = C9
+        conv_index['conv_block5.conv2.weight'] = C10
+        conv_index['conv_block6.conv1.weight'] = C11
+        conv_index['conv_block6.conv2.weight'] = C12
+
+        # Spectrogram extractor
+        self.spectrogram_extractor = Spectrogram(n_fft=window_size, hop_length=hop_size, 
+            win_length=window_size, window=window, center=center, pad_mode=pad_mode, 
+            freeze_parameters=True)
+
+        # Logmel feature extractor
+        self.logmel_extractor = LogmelFilterBank(sr=sample_rate, n_fft=window_size, 
+            n_mels=mel_bins, fmin=fmin, fmax=fmax, ref=ref, amin=amin, top_db=top_db, 
+            freeze_parameters=True)
+
+        # Spec augmenter
+        self.spec_augmenter = SpecAugmentation(time_drop_width=64, time_stripes_num=2, 
+            freq_drop_width=8, freq_stripes_num=2)
+
+        self.bn0 = nn.BatchNorm2d(64)
+
+        self.conv_block1 = ConvBlock_pruned(in_channels_1=1, out_channels_1=int(64*(1-p1)),out_channels_2=int(64*(1-p2)))
+        self.conv_block2 = ConvBlock_pruned(in_channels_1=int(64*(1-p2)), out_channels_1=int(128*(1-p3)),out_channels_2=int(128*(1-p4)))
+        self.conv_block3 = ConvBlock_pruned(in_channels_1=int(128*(1-p4)), out_channels_1=int(256*(1-p5)),out_channels_2=int(256*(1-p6)))
+        self.conv_block4 = ConvBlock_pruned(in_channels_1=int(256*(1-p6)), out_channels_1=int(512*(1-p7)),out_channels_2=int(512*(1-p8)))
+        self.conv_block5 = ConvBlock_pruned(in_channels_1=int(512*(1-p8)), out_channels_1=int(1024*(1-p9)),out_channels_2=int(1024*(1-p10)))
+        self.conv_block6 = ConvBlock_pruned(in_channels_1=int(1024*(1-p10)), out_channels_1=int((1-p11)*2048),out_channels_2=int(2048*(1-p12)))
+
+        self.fc1 = nn.Linear(int(2048*(1-p12)), 2048, bias=True)
+        self.fc_audioset = nn.Linear(2048, classes_num, bias=True)
+        
+        # self.init_weight()
+        checkpoint_path = '/mnt/fast/nobackup/scratch4weeks/as0150/arshdeep/PANNs_pruning/Cnn14_mAP=0.431.pth'
+        checkpoint = torch.load(checkpoint_path, map_location=torch.device('cpu'))
+
+        weights = checkpoint['model']
+        weights_pruned = checkpoint['model']
+
+        conv_key_list = ['conv_block1.conv1.weight', 'conv_block1.conv2.weight','conv_block2.conv1.weight', 'conv_block2.conv2.weight','conv_block3.conv1.weight', 'conv_block3.conv2.weight','conv_block4.conv1.weight', 'conv_block4.conv2.weight','conv_block5.conv1.weight', 'conv_block5.conv2.weight','conv_block6.conv1.weight', 'conv_block6.conv2.weight']
+        bn_key_list = ['conv_block1.bn1.weight', 'conv_block1.bn1.bias', 'conv_block1.bn1.running_mean', 'conv_block1.bn1.running_var','conv_block1.bn2.weight', 'conv_block1.bn2.bias', 'conv_block1.bn2.running_mean', 'conv_block1.bn2.running_var','conv_block2.bn1.weight', 'conv_block2.bn1.bias', 'conv_block2.bn1.running_mean', 'conv_block2.bn1.running_var','conv_block2.bn2.weight', 'conv_block2.bn2.bias', 'conv_block2.bn2.running_mean', 'conv_block2.bn2.running_var','conv_block3.bn1.weight', 'conv_block3.bn1.bias', 'conv_block3.bn1.running_mean', 'conv_block3.bn1.running_var','conv_block3.bn2.weight', 'conv_block3.bn2.bias', 'conv_block3.bn2.running_mean', 'conv_block3.bn2.running_var','conv_block4.bn1.weight', 'conv_block4.bn1.bias', 'conv_block4.bn1.running_mean', 'conv_block4.bn1.running_var','conv_block4.bn2.weight', 'conv_block4.bn2.bias', 'conv_block4.bn2.running_mean', 'conv_block4.bn2.running_var','conv_block5.bn1.weight', 'conv_block5.bn1.bias', 'conv_block5.bn1.running_mean', 'conv_block5.bn1.running_var','conv_block5.bn2.weight', 'conv_block5.bn2.bias', 'conv_block5.bn2.running_mean', 'conv_block5.bn2.running_var','conv_block6.bn1.weight', 'conv_block6.bn1.bias', 'conv_block6.bn1.running_mean', 'conv_block6.bn1.running_var','conv_block6.bn2.weight', 'conv_block6.bn2.bias', 'conv_block6.bn2.running_mean', 'conv_block6.bn2.running_var']
+        prev_conv_key_list =  ['conv_block1.conv1.weight', 'conv_block1.conv2.weight','conv_block2.conv1.weight', 'conv_block2.conv2.weight','conv_block3.conv1.weight', 'conv_block3.conv2.weight','conv_block4.conv1.weight', 'conv_block4.conv2.weight','conv_block5.conv1.weight', 'conv_block5.conv2.weight','conv_block6.conv1.weight']
+
+        Z = OrderedDict()
+        j = 0
+        i = 0
+        for key in conv_key_list:
+            W_2D = weights[key].numpy()
+            print(key, prev_conv_key_list[i-1])
+            if i == 0:
+                weights_pruned[key] = torch.tensor(W_2D[conv_index[key],:,:,:])
+            else:
+                weights_pruned[key] = torch.tensor(W_2D[conv_index[key],:,:,:][:,conv_index[prev_conv_key_list[i-1]],:,:])
+            weights_pruned[bn_key_list[j]] = weights[bn_key_list[j]][conv_index[key]]
+            weights_pruned[bn_key_list[j+1]] = weights[bn_key_list[j+1]][conv_index[key]]
+            weights_pruned[bn_key_list[j+2]] = weights[bn_key_list[j+2]][conv_index[key]]
+            weights_pruned[bn_key_list[j+3]] = weights[bn_key_list[j+3]][conv_index[key]] 
+            j = j + 4
+            i = i + 1
+            filename = path + key + '.npy'
+            
+        weights_pruned['fc1.weight'] = weights['fc1.weight'][:,conv_index['conv_block6.conv2.weight']]
+
+        self.load_state_dict(weights_pruned)
+ 
+    def forward(self, input, mixup_lambda=None):
+        """
+        Input: (batch_size, data_length)"""
+
+        x = self.spectrogram_extractor(input)   # (batch_size, 1, time_steps, freq_bins)
+        x = self.logmel_extractor(x)    # (batch_size, 1, time_steps, mel_bins)
+
+        x = x.transpose(1, 3)
+        x = self.bn0(x)
+        x = x.transpose(1, 3)
+        
+        if self.training:
+            x = self.spec_augmenter(x)
+
+        # Mixup on spectrogram
+        if self.training and mixup_lambda is not None:
+            x = do_mixup(x, mixup_lambda)
+
+        x = self.conv_block1(x, pool_size=(2, 2), pool_type='avg')
+        x = F.dropout(x, p=0.2, training=self.training)
+        x = self.conv_block2(x, pool_size=(2, 2), pool_type='avg')
+        x = F.dropout(x, p=0.2, training=self.training)
+        x = self.conv_block3(x, pool_size=(2, 2), pool_type='avg')
+        x = F.dropout(x, p=0.2, training=self.training)
+        x = self.conv_block4(x, pool_size=(2, 2), pool_type='avg')
+        x = F.dropout(x, p=0.2, training=self.training)
+        x = self.conv_block5(x, pool_size=(2, 2), pool_type='avg')
+        x = F.dropout(x, p=0.2, training=self.training)
+        x = self.conv_block6(x, pool_size=(1, 1), pool_type='avg')
+        x = F.dropout(x, p=0.2, training=self.training)
+        x = torch.mean(x, dim=3)
+        
+        (x1, _) = torch.max(x, dim=2)
+        x2 = torch.mean(x, dim=2)
+        x = x1 + x2
+        x = F.dropout(x, p=0.5, training=self.training)
+        x = F.relu_(self.fc1(x))
+        embedding = F.dropout(x, p=0.5, training=self.training)
+        clipwise_output = torch.sigmoid(self.fc_audioset(x))
+        # clipwise_output = torch.log_softmax(self.fc_audioset(x))        
+        # clipwise_output = nn.functional.softmax(self.fc_audioset(x))        
+
+        output_dict = {'clipwise_output': clipwise_output, 'embedding': embedding}
+
+        return output_dict
+    
 class Cnn14_SUB4_LOG(nn.Module):
     def __init__(self, sample_rate, window_size, hop_size, mel_bins, fmin, 
         fmax, classes_num, pooling_type, pooling_factor):

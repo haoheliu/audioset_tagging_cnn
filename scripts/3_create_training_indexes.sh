@@ -3,19 +3,19 @@ WORKSPACE=${1:-"./workspaces/audioset_tagging"}   # Default argument.
 
 # evaluation indexes
 python3 utils/create_indexes.py create_indexes \
-    --waveforms_hdf5_path=$WORKSPACE"/hdf5s/waveforms/eval.h5" \
+    --waveforms_hdf5_path="/mnt/fast/datasets/audio/audioset/waveforms_hdf5s/eval.h5" \
     --indexes_hdf5_path=$WORKSPACE"/hdf5s/indexes/eval.h5"
 
 # Balanced training indexes
 python3 utils/create_indexes.py create_indexes \
-    --waveforms_hdf5_path=$WORKSPACE"/hdf5s/waveforms/balanced_train.h5" \
+    --waveforms_hdf5_path="/mnt/fast/datasets/audio/audioset/waveforms_hdf5s/balanced_train.h5" \
     --indexes_hdf5_path=$WORKSPACE"/hdf5s/indexes/balanced_train.h5"
 
 # Unbalanced training indexes
 for IDX in {0..40}; do
     echo $IDX
     python3 utils/create_indexes.py create_indexes \
-        --waveforms_hdf5_path=$WORKSPACE"/hdf5s/waveforms/unbalanced_train/unbalanced_train_part$IDX.h5" \
+        --waveforms_hdf5_path="/mnt/fast/datasets/audio/audioset/waveforms_hdf5s/unbalanced_train/unbalanced_train_part$IDX.h5" \
         --indexes_hdf5_path=$WORKSPACE"/hdf5s/indexes/unbalanced_train/unbalanced_train_part$IDX.h5"
 done
 
