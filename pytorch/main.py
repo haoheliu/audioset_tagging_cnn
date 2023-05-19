@@ -21,6 +21,7 @@ from pytorch_utils import (move_data_to_device, count_parameters, count_flops,
 from data_generator import (AudioSetDataset, TrainSampler, BalancedTrainSampler, 
     AlternateTrainSampler, EvaluateSampler, collate_fn)
 from model.panns import PANNs_MobileNet
+from model.bc_resnet import BCResNet_Mod
 
 from evaluate import Evaluator
 import config
@@ -136,6 +137,9 @@ def train(args):
     if(model_type == "mobilenet"):
         model = PANNs_MobileNet(sample_rate, window_size, hop_size, mel_bins, fmin, 
         fmax, number_class=527, pooling_factor=pooling_factor, pooling_type=pooling_type)
+    if(model_type == "bc_resnet"):
+        model = BCResNet_Mod(sample_rate, window_size, hop_size, mel_bins, fmin, 
+        fmax, num_class=527, pooling_factor=pooling_factor, pooling_type=pooling_type)
     else:
         Model = eval(model_type)
         model = Model(sample_rate=sample_rate, window_size=window_size, 
@@ -289,10 +293,10 @@ def train(args):
         
         # Forward
         model.train()
-
+        
         if 'mixup' in augmentation:
             batch_output_dict = model(batch_data_dict['waveform'], 
-                batch_data_dict['mixup_lambda'])
+                mixup_lambda=batch_data_dict['mixup_lambda'])
             """{'clipwise_output': (batch_size, classes_num), ...}"""
 
             batch_target_dict = {'target': do_mixup(batch_data_dict['target'], 
@@ -307,7 +311,6 @@ def train(args):
 
         # Loss
         loss = loss_func(batch_output_dict, batch_target_dict)
-
         # Backward
         loss.backward()
         
